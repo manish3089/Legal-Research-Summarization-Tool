@@ -5,10 +5,20 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import string
 import re
+from nltk.data import find
 
-# Download NLTK assets only once
-nltk.download("punkt")
-nltk.download("stopwords")
+def download_nltk_resources():
+    try:
+        find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+    
+    try:
+        find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
+
+download_nltk_resources()
 
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
