@@ -11,7 +11,7 @@ try:
     nltk.data.find('tokenizers/punkt')
     nltk.data.find('corpora/stopwords')
 except LookupError:
-    nltk.download('punkt')
+    nltk.download('punkt') 
     nltk.download('stopwords')
 
 def preprocess_text(text):
@@ -176,7 +176,7 @@ def extractive_summarize(text, num_sentences=3, method='textrank'):
         return f"Summarization error: {e}"
 
 # Example usage
-if _name_ == "_main_":
+if __name__ == "__main__":
     sample_text = """
     Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence concerned with the interactions between computers and human language, in particular how to program computers to process and analyze large amounts of natural language data. The goal is a computer capable of "understanding" the contents of documents, including the contextual nuances of the language within them. The technology can then accurately extract information and insights contained in the documents as well as categorize and organize the documents themselves.
     
