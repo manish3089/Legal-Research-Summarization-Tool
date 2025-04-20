@@ -1,1 +1,40 @@
+<script>
+    function uploadPDF() {
+        const fileInput = document.getElementById('pdfFile');
+        const status = document.getElementById('status');
 
+        if (!fileInput.files.length) {
+            status.textContent = "Please select a PDF file.";
+            status.style.color = "red";
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append('pdf', file);
+
+        status.textContent = "Uploading...";
+        status.style.color = "black";
+
+        // Replace 'your-backend-endpoint' with your actual backend API endpoint
+        fetch('your-backend-endpoint', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.summary) {
+                status.textContent = "Summary: " + data.summary;
+                status.style.color = "green";
+            } else {
+                status.textContent = "Failed to summarize the PDF.";
+                status.style.color = "red";
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            status.textContent = "An error occurred while uploading.";
+            status.style.color = "red";
+        });
+    }
+</script>
