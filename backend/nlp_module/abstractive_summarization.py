@@ -1,197 +1,184 @@
-import re
+import sys
+import os
+
+# Add the project root directory to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from backend.nlp_module.text_preprocessing import preprocess_text
+
+from transformers import BartForConditionalGeneration, BartTokenizer
+import torch
 import nltk
-import spacy
-import numpy as np
-import networkx as nx
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from nltk.corpus import stopwords
-from transformers import pipeline
+from nltk.tokenize import sent_tokenize
 
-# Download NLTK stopwords
-def download_nltk_resources():
-    try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
-        nltk.download('stopwords')
+# Download required NLTK data
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt_tab')
 
-download_nltk_resources()
+class AbstractiveSummarizer:
+    """
+    A class to perform abstractive summarization using BART model.
+    """
+    def __init__(self, model_name="facebook/bart-large-cnn"):
+        """
+        Initialize the BART model and tokenizer.
+        
+        Parameters:
+        model_name (str): Name of the pretrained BART model to use.
+        """
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.tokenizer = BartTokenizer.from_pretrained(model_name)
+        self.model = BartForConditionalGeneration.from_pretrained(model_name).to(self.device)
+        self.max_input_length = 1024  # BART's max token length
+        self.max_output_length = 150  # Max length for generated summary
 
-# Load SpaCy model
-nlp = spacy.load("en_core_web_sm")
-stop_words = set(stopwords.words('english'))
+    def preprocess_input(self, text):
+        """
+        Preprocess the input text using the existing preprocess_text function and sentence tokenization.
+        
+        Parameters:
+        text (str): Input text to preprocess.
+        
+        Returns:
+        str: Preprocessed text ready for summarization.
+        """
+        try:
+            # Apply existing preprocessing
+            processed_text = preprocess_text(text)
+            # Split into sentences
+            sentences = sent_tokenize(processed_text)
+            # Join sentences to ensure coherent input
+            return " ".join(sentences)
+        except Exception as e:
+            print(f"Error during preprocessing: {e}")
+            return text  # Fallback to original text
 
-# ----------- Preprocessing and Entity Extraction -----------
+    def chunk_text(self, text):
+        """
+        Split long text into chunks to fit within BART's token limit.
+        
+        Parameters:
+        text (str): Input text to chunk.
+        
+        Returns:
+        list: List of text chunks.
+        """
+        sentences = sent_tokenize(text)
+        chunks = []
+        current_chunk = []
+        current_length = 0
 
-def preprocess_text(text):
-    if not text:
-        raise ValueError("Input text cannot be empty.")
-    case_ids = re.findall(r'(Case\s*No\.?\s*\d+/\d+)', text)
-    case_ids_lower = [cid.lower() for cid in case_ids]
-
-    doc = nlp(text)
-    entity_spans = []
-    for ent in doc.ents:
-        if ent.label_ in ['DATE', 'CARDINAL', 'ORDINAL']:
-            entity_spans.append((ent.start, ent.end, ent.text.lower()))
-
-    lemmas = case_ids_lower.copy()
-    i = 0
-    while i < len(doc):
-        is_in_entity = False
-        entity_text = None
-        for start, end, ent_text in entity_spans:
-            if start <= i < end:
-                is_in_entity = True
-                entity_text = ent_text
-                i = end
-                break
-        if is_in_entity:
-            if entity_text not in lemmas:
-                lemmas.append(entity_text)
-        else:
-            token = doc[i]
-            if not any(token.text.lower() in cid for cid in case_ids_lower):
-                if token.ent_type_ in ['DATE', 'CARDINAL', 'ORDINAL', 'TIME']:
-                    lemmas.append(token.text.lower())
-                elif token.is_alpha and token.text.lower() not in stop_words:
-                    lemmas.append(token.lemma_.lower())
-            i += 1
-
-    preprocessed_text = " ".join(lemmas)
-    preprocessed_text = re.sub(r'\s+([.,:;!?])', r'\1', preprocessed_text)
-    preprocessed_text = re.sub(r'([.,:;!?])\s+', r'\1 ', preprocessed_text)
-    return preprocessed_text.strip()
-
-def extract_entities(text):
-    doc = nlp(text)
-    entities = {
-        "PERSON": [], "ORG": [], "DATE": [], "GPE": [], "CASE_ID": []
-    }
-
-    for ent in doc.ents:
-        if ent.label_ == "PERSON":
-            if ent.start > 0 and doc[ent.start - 1].text.lower() in ["judge", "justice"]:
-                full_name = f"{doc[ent.start - 1].text} {ent.text}"
-                entities["PERSON"].append(full_name)
+        for sentence in sentences:
+            sentence_tokens = self.tokenizer.encode(sentence, add_special_tokens=False)
+            if current_length + len(sentence_tokens) > self.max_input_length - 50:  # Buffer for special tokens
+                chunks.append(" ".join(current_chunk))
+                current_chunk = [sentence]
+                current_length = len(sentence_tokens)
             else:
-                entities["PERSON"].append(ent.text)
-        elif ent.label_ == "ORG":
-            org_name = ent.text.replace("the ", "")
-            entities["ORG"].append(org_name)
-        elif ent.label_ in entities:
-            entities[ent.label_].append(ent.text)
+                current_chunk.append(sentence)
+                current_length += len(sentence_tokens)
 
-    case_ids = re.findall(r'(Case\s*No\.?\s*\d+/\d+)', text)
-    entities["CASE_ID"].extend(case_ids)
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
 
-    org_patterns = [r'High\s*Court\s*of\s*[A-Za-z]+', r'CID\s*[A-Za-z]+']
-    for pattern in org_patterns:
-        matches = re.findall(pattern, text)
-        for match in matches:
-            entities["ORG"].append(match)
+        return chunks
 
-    filtered_orgs = []
-    for org in entities["ORG"]:
-        if not any(org != other and org in other for other in entities["ORG"]):
-            filtered_orgs.append(org)
-    entities["ORG"] = filtered_orgs
+    def summarize_chunk(self, chunk, num_sentences=3):
+        """
+        Summarize a single chunk of text using BART.
+        
+        Parameters:
+        chunk (str): Text chunk to summarize.
+        num_sentences (int): Approximate number of sentences in the summary.
+        
+        Returns:
+        str: Summarized text for the chunk.
+        """
+        try:
+            inputs = self.tokenizer(
+                chunk,
+                max_length=self.max_input_length,
+                truncation=True,
+                padding="max_length",
+                return_tensors="pt"
+            ).to(self.device)
 
-    for key in entities:
-        entities[key] = list(dict.fromkeys(entities[key]))
+            # Calculate dynamic max_length based on num_sentences
+            avg_tokens_per_sentence = 20  # Approximate tokens per sentence
+            dynamic_max_length = min(self.max_output_length, num_sentences * avg_tokens_per_sentence)
 
-    return entities
+            summary_ids = self.model.generate(
+                inputs.input_ids,
+                num_beams=4,
+                max_length=dynamic_max_length,
+                min_length=30,
+                early_stopping=True
+            )
 
-# ----------- Sentence Splitting -----------
+            summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+            return summary
+        except Exception as e:
+            print(f"Error during chunk summarization: {e}")
+            return ""
 
-def split_sentences(text):
-    doc = nlp(text)
-    return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
+    def abstractive_summarize(self, text, num_sentences=3):
+        """
+        Main function to create an abstractive summary of text.
+        
+        Parameters:
+        text (str): The input text to summarize.
+        num_sentences (int): Approximate number of sentences in the summary.
+        
+        Returns:
+        str: The abstractive summary.
+        """
+        if not text or text.isspace():
+            return "No text to summarize."
 
-# ----------- Extractive Summarization -----------
+        try:
+            # Preprocess the input text
+            processed_text = self.preprocess_input(text)
 
-def textrank_summarize(text, top_n=3):
-    sentences = split_sentences(text)
-    if len(sentences) < top_n:
-        return " ".join(sentences)
+            # Chunk the text if it's too long
+            chunks = self.chunk_text(processed_text)
 
-    vectorizer = TfidfVectorizer(stop_words='english')
-    X = vectorizer.fit_transform(sentences)
+            # Summarize each chunk
+            summaries = []
+            sentences_per_chunk = max(1, num_sentences // max(1, len(chunks)))  # Distribute sentences
 
-    sim_matrix = cosine_similarity(X)
-    np.fill_diagonal(sim_matrix, 0)
+            for chunk in chunks:
+                summary = self.summarize_chunk(chunk, sentences_per_chunk)
+                if summary:
+                    summaries.append(summary)
 
-    nx_graph = nx.from_numpy_array(sim_matrix)
-    scores = nx.pagerank(nx_graph)
+            # Combine summaries
+            final_summary = " ".join(summaries)
 
-    ranked_sentences = sorted(((scores[i], s) for i, s in enumerate(sentences)), reverse=True)
-    selected = [s for _, s in ranked_sentences[:top_n]]
+            # Post-process to ensure approximate sentence count
+            final_sentences = sent_tokenize(final_summary)
+            if len(final_sentences) > num_sentences:
+                final_sentences = final_sentences[:num_sentences]
+                final_summary = " ".join(final_sentences)
 
-    original_indices = [sentences.index(s) for s in selected]
-    selected = [selected[i] for i in np.argsort(original_indices)]
+            return final_summary.strip() if final_summary else "Summarization failed."
+        except Exception as e:
+            print(f"Error during abstractive summarization: {e}")
+            return f"Summarization error: {e}"
 
-    return " ".join(selected)
-
-def tfidf_summarize(text, top_n=3):
-    sentences = split_sentences(text)
-    if len(sentences) < top_n:
-        return " ".join(sentences)
-
-    vectorizer = TfidfVectorizer(stop_words='english')
-    X = vectorizer.fit_transform(sentences)
-    scores = X.sum(axis=1).A1
-
-    ranked_indices = np.argsort(scores)[::-1][:top_n]
-    selected = [sentences[i] for i in sorted(ranked_indices)]
-
-    return " ".join(selected)
-
-def hybrid_summarize(text, top_n=3, textrank_weight=0.6, tfidf_weight=0.4):
-    if textrank_weight + tfidf_weight != 1.0:
-        raise ValueError("Weights must sum to 1.0")
-
-    sentences = split_sentences(text)
-    if len(sentences) < top_n:
-        return " ".join(sentences)
-
-    vectorizer = TfidfVectorizer(stop_words='english')
-    X = vectorizer.fit_transform(sentences)
-
-    sim_matrix = cosine_similarity(X)
-    np.fill_diagonal(sim_matrix, 0)
-    nx_graph = nx.from_numpy_array(sim_matrix)
-    textrank_scores = np.array(list(nx.pagerank(nx_graph).values()))
-    textrank_scores = (textrank_scores - textrank_scores.min()) / (textrank_scores.ptp() or 1)
-
-    tfidf_scores = X.sum(axis=1).A1
-    tfidf_scores = (tfidf_scores - tfidf_scores.min()) / (tfidf_scores.ptp() or 1)
-
-    combined = textrank_weight * textrank_scores + tfidf_weight * tfidf_scores
-    ranked_indices = np.argsort(combined)[::-1][:top_n]
-    selected = [sentences[i] for i in sorted(ranked_indices)]
-
-    return " ".join(selected)
-
-# ----------- Abstractive Summarization -----------
-
-summarizer_model = pipeline("summarization", model="facebook/bart-large-cnn")
-
-def abstractive_summarize(text, max_length=130, min_length=30):
-    if not text.strip():
-        return ""
-    return summarizer_model(text, max_length=max_length, min_length=min_length, do_sample=False)[0]['summary_text']
-
-# ----------- Main summarization wrapper -----------
-
-def summarize(text, method='hybrid', top_n=3, textrank_weight=0.6, tfidf_weight=0.4):
-    if method == 'textrank':
-        return textrank_summarize(text, top_n)
-    elif method == 'tfidf':
-        return tfidf_summarize(text, top_n)
-    elif method == 'hybrid':
-        return hybrid_summarize(text, top_n, textrank_weight, tfidf_weight)
-    elif method == 'abstractive':
-        return abstractive_summarize(text)
-    else:
-        raise ValueError("Unsupported method. Choose from 'textrank', 'tfidf', 'hybrid', or 'abstractive'.")
-
+# Example usage
+if __name__ == "__main__":
+    sample_text = """
+    Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence concerned with the interactions between computers and human language, in particular how to program computers to process and analyze large amounts of natural language data. The goal is a computer capable of "understanding" the contents of documents, including the contextual nuances of the language within them. The technology can then accurately extract information and insights contained in the documents as well as categorize and organize the documents themselves.
+    
+    Challenges in natural language processing frequently involve speech recognition, natural language understanding, and natural language generation. The process of natural language processing has several steps including lexical analysis, parsing, semantic analysis, discourse integration, and pragmatic analysis. Each step has its own challenges and approaches.
+    
+    Modern NLP approaches are based on machine learning, especially statistical machine learning. Many different classes of machine-learning algorithms have been applied to natural-language-processing tasks. These algorithms take as input a large set of "features" that are generated from the input data.
+    
+    Some of the earliest-used machine learning algorithms, such as decision trees, produced systems of hard if-then rules similar to existing hand-written rules. However, part-of-speech tagging introduced the use of hidden Markov models to natural language processing, and increasingly, research has focused on statistical models, which make soft, probabilistic decisions based on attaching real-valued weights to the features making up the input data.
+    """
+    
+    summarizer = AbstractiveSummarizer()
+    summary = summarizer.abstractive_summarize(sample_text, num_sentences=3)
+    print(f"Abstractive Summary:\n{summary}")
