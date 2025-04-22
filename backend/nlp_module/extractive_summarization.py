@@ -1,191 +1,128 @@
-import nltk
+import spacy
 import numpy as np
-from nltk.corpus import stopwords
-from nltk.tokenize import sent_tokenize, word_tokenize
-from nltk.cluster.util import cosine_distance
 import networkx as nx
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Download required NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('punkt') 
-    nltk.download('stopwords')
+# Load SpaCy model
+nlp = spacy.load("en_core_web_sm")
 
-def preprocess_text(text):
-    """
-    Clean and preprocess the input text
-    """
-    # Remove extra whitespace and convert to lowercase
-    text = ' '.join(text.split())
-    
-    # Handle potential encoding issues
-    text = text.encode('ascii', 'ignore').decode('ascii')
-    
-    return text
+def split_sentences(text):
+    """Uses SpaCy to split text into sentences."""
+    doc = nlp(text)
+    return [sent.text.strip() for sent in doc.sents if sent.text.strip()]
 
-def sentence_similarity_cosine(sent1, sent2, stopwords=None):
+def hybrid_summarize(text, top_n=3, textrank_weight=0.6, tfidf_weight=0.4):
     """
-    Calculate cosine similarity between two sentences
-    """
-    if stopwords is None:
-        stopwords = []
-    
-    # Convert sentences to lowercase and tokenize
-    sent1 = [word.lower() for word in word_tokenize(sent1)]
-    sent2 = [word.lower() for word in word_tokenize(sent2)]
-    
-    # Remove stopwords
-    sent1 = [word for word in sent1 if word not in stopwords]
-    sent2 = [word for word in sent2 if word not in stopwords]
-    
-    # If either sentence is empty after preprocessing, return 0 similarity
-    if len(sent1) == 0 or len(sent2) == 0:
-        return 0.0
-    
-    # Create a set of all unique words in both sentences
-    all_words = list(set(sent1 + sent2))
-    
-    # Create word frequency vectors
-    vector1 = [0] * len(all_words)
-    vector2 = [0] * len(all_words)
-    
-    # Fill the vectors with word frequencies
-    for word in sent1:
-        vector1[all_words.index(word)] += 1
-    
-    for word in sent2:
-        vector2[all_words.index(word)] += 1
-    
-    # Calculate cosine distance and convert to similarity
-    return 1 - cosine_distance(vector1, vector2)
-
-def build_similarity_matrix(sentences, stop_words):
-    """
-    Create similarity matrix between all sentences
-    """
-    # Create an empty similarity matrix
-    similarity_matrix = np.zeros((len(sentences), len(sentences)))
-    
-    # Calculate similarity for each pair of sentences
-    for i in range(len(sentences)):
-        for j in range(len(sentences)):
-            if i == j:  # Same sentence
-                similarity_matrix[i][j] = 1.0
-            else:
-                similarity_matrix[i][j] = sentence_similarity_cosine(
-                    sentences[i], sentences[j], stop_words)
-    
-    return similarity_matrix
-
-def textrank_summarization(text, num_sentences=3):
-    """
-    Use TextRank algorithm to extract top sentences
-    """
-    # Preprocess text
-    text = preprocess_text(text)
-    
-    # Split into sentences
-    sentences = sent_tokenize(text)
-    
-    # Handle case where text has fewer sentences than requested
-    if len(sentences) <= num_sentences:
-        return " ".join(sentences)
-    
-    # Get stopwords
-    stop_words = set(stopwords.words('english'))
-    
-    # Create similarity matrix
-    sentence_similarity_matrix = build_similarity_matrix(sentences, stop_words)
-    
-    # Apply PageRank algorithm
-    nx_graph = nx.from_numpy_array(sentence_similarity_matrix)
-    scores = nx.pagerank(nx_graph)
-    
-    # Sort sentences by score
-    ranked_sentences = sorted(((scores[i], sentence) for i, sentence in enumerate(sentences)), 
-                             reverse=True)
-    
-    # Get top sentences while preserving the original order
-    top_sentence_indices = sorted([sentences.index(ranked_sentences[i][1]) 
-                                  for i in range(min(num_sentences, len(ranked_sentences)))])
-    summary = [sentences[i] for i in top_sentence_indices]
-    
-    return " ".join(summary)
-
-def tfidf_summarization(text, num_sentences=3):
-    """
-    Use TF-IDF to extract top sentences
-    """
-    # Preprocess text
-    text = preprocess_text(text)
-    
-    # Split into sentences
-    sentences = sent_tokenize(text)
-    
-    # Handle case where text has fewer sentences than requested
-    if len(sentences) <= num_sentences:
-        return " ".join(sentences)
-    
-    # Create TF-IDF vectorizer
-    vectorizer = TfidfVectorizer(stop_words='english')
-    
-    # Generate TF-IDF matrix
-    tfidf_matrix = vectorizer.fit_transform(sentences)
-    
-    # Calculate sentence scores based on TF-IDF values
-    sentence_scores = []
-    for i in range(len(sentences)):
-        score = np.sum(tfidf_matrix[i].toarray())
-        sentence_scores.append((score, i))
-    
-    # Sort sentences by score
-    ranked_sentences = sorted(sentence_scores, reverse=True)
-    
-    # Get top sentences while preserving the original order
-    top_sentence_indices = sorted([ranked_sentences[i][1] 
-                                  for i in range(min(num_sentences, len(ranked_sentences)))])
-    summary = [sentences[i] for i in top_sentence_indices]
-    
-    return " ".join(summary)
-
-def extractive_summarize(text, num_sentences=3, method='textrank'):
-    """
-    Main function to create an extractive summary of text
+    Summarizes text using a hybrid approach combining TextRank and TF-IDF.
     
     Parameters:
-    text (str): The input text to summarize
-    num_sentences (int): Number of sentences in the summary
-    method (str): Summarization method ('textrank' or 'tfidf')
-    
+        text (str): The input text.
+        top_n (int): Number of top sentences to include in the summary.
+        textrank_weight (float): Weight given to TextRank scores (0.0-1.0).
+        tfidf_weight (float): Weight given to TF-IDF scores (0.0-1.0).
+        
     Returns:
-    str: The extractive summary
+        str: Extractive summary.
     """
-    if not text or text.isspace():
-        return "No text to summarize."
-    
-    try:
-        if method.lower() == 'tfidf':
-            return tfidf_summarization(text, num_sentences)
-        else:  # Default to TextRank
-            return textrank_summarization(text, num_sentences)
-    except Exception as e:
-        print(f"Error during summarization: {e}")
-        return f"Summarization error: {e}"
+    # Validate weights
+    if textrank_weight + tfidf_weight != 1.0:
+        raise ValueError("Weights must sum to 1.0")
+        
+    sentences = split_sentences(text)
+    if len(sentences) < top_n:
+        return " ".join(sentences)
 
-# Example usage
-if __name__ == "__main__":
-    sample_text = """
-    Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence concerned with the interactions between computers and human language, in particular how to program computers to process and analyze large amounts of natural language data. The goal is a computer capable of "understanding" the contents of documents, including the contextual nuances of the language within them. The technology can then accurately extract information and insights contained in the documents as well as categorize and organize the documents themselves.
+    # TF-IDF vectorization
+    vectorizer = TfidfVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(sentences)
     
-    Challenges in natural language processing frequently involve speech recognition, natural language understanding, and natural language generation. The process of natural language processing has several steps including lexical analysis, parsing, semantic analysis, discourse integration, and pragmatic analysis. Each step has its own challenges and approaches.
+    # TextRank scores
+    sim_matrix = cosine_similarity(X)
+    np.fill_diagonal(sim_matrix, 0)
+    nx_graph = nx.from_numpy_array(sim_matrix)
+    textrank_scores = np.array(list(nx.pagerank(nx_graph).values()))
     
-    Modern NLP approaches are based on machine learning, especially statistical machine learning. Many different classes of machine-learning algorithms have been applied to natural-language-processing tasks. These algorithms take as input a large set of "features" that are generated from the input data.
+    # Normalize TextRank scores to range [0,1]
+    if textrank_scores.max() != textrank_scores.min():
+        textrank_scores = (textrank_scores - textrank_scores.min()) / (textrank_scores.max() - textrank_scores.min())
     
-    Some of the earliest-used machine learning algorithms, such as decision trees, produced systems of hard if-then rules similar to existing hand-written rules. However, part-of-speech tagging introduced the use of hidden Markov models to natural language processing, and increasingly, research has focused on statistical models, which make soft, probabilistic decisions based on attaching real-valued weights to the features making up the input data.
+    # TF-IDF scores (sum of TF-IDF values for each sentence)
+    tfidf_scores = X.sum(axis=1).A1  # Flatten to 1D array
+    
+    # Normalize TF-IDF scores to range [0,1]
+    if tfidf_scores.max() != tfidf_scores.min():
+        tfidf_scores = (tfidf_scores - tfidf_scores.min()) / (tfidf_scores.max() - tfidf_scores.min())
+    
+    # Combine scores with weights
+    combined_scores = textrank_weight * textrank_scores + tfidf_weight * tfidf_scores
+    
+    # Get top sentences by combined score
+    ranked_indices = np.argsort(combined_scores)[::-1][:top_n]
+    
+    # Keep sentences in original order
+    selected = [sentences[i] for i in sorted(ranked_indices)]
+    
+    return " ".join(selected)
+
+def summarize(text, method='hybrid', top_n=3, textrank_weight=0.6, tfidf_weight=0.4):
     """
+    Unified summarization function supporting multiple methods.
     
-    summary = extractive_summarize(sample_text, num_sentences=3)
-    print(f"Summary:\n{summary}")
+    Parameters:
+        text (str): The input text.
+        method (str): One of 'hybrid', 'textrank', or 'tfidf'.
+        top_n (int): Number of top sentences to include in the summary.
+        textrank_weight (float): Weight for TextRank in hybrid method.
+        tfidf_weight (float): Weight for TF-IDF in hybrid method.
+        
+    Returns:
+        str: Extractive summary.
+    """
+    if method == 'hybrid':
+        return hybrid_summarize(text, top_n, textrank_weight, tfidf_weight)
+    elif method == 'textrank':
+        return textrank_summarize(text, top_n)
+    elif method == 'tfidf':
+        return tfidf_summarize(text, top_n)
+    else:
+        raise ValueError("Method must be 'hybrid', 'textrank', or 'tfidf'")
+
+def textrank_summarize(text, top_n=3):
+    """Summarizes text using TextRank (based on sentence similarity)."""
+    sentences = split_sentences(text)
+    if len(sentences) < top_n:
+        return " ".join(sentences)
+
+    vectorizer = TfidfVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(sentences)
+
+    sim_matrix = cosine_similarity(X)
+    np.fill_diagonal(sim_matrix, 0)
+
+    nx_graph = nx.from_numpy_array(sim_matrix)
+    scores = nx.pagerank(nx_graph)
+
+    ranked_sentences = sorted(((scores[i], s) for i, s in enumerate(sentences)), reverse=True)
+    selected = [s for _, s in ranked_sentences[:top_n]]
+    
+    # Sort by original order
+    original_indices = [sentences.index(s) for s in selected]
+    selected = [selected[i] for i in np.argsort(original_indices)]
+    
+    return " ".join(selected)
+
+def tfidf_summarize(text, top_n=3):
+    """Summarizes text based on sentence importance via TF-IDF score sum."""
+    sentences = split_sentences(text)
+    if len(sentences) < top_n:
+        return " ".join(sentences)
+
+    vectorizer = TfidfVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(sentences)
+    sentence_scores = X.sum(axis=1).A1  # Flatten to 1D array
+
+    ranked_indices = np.argsort(sentence_scores)[::-1][:top_n]
+    selected = [sentences[i] for i in sorted(ranked_indices)]  # Preserve order
+
+    return " ".join(selected)
