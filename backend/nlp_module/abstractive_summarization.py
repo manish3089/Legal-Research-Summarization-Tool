@@ -8,14 +8,10 @@ from backend.nlp_module.text_preprocessing import preprocess_text
 
 from transformers import BartForConditionalGeneration, BartTokenizer
 import torch
-import nltk
-from nltk.tokenize import sent_tokenize
+import spacy
 
-# Download required NLTK data
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt_tab')
+# Load spaCy English model
+nlp = spacy.load("en_core_web_sm")
 
 class AbstractiveSummarizer:
     """
@@ -31,8 +27,21 @@ class AbstractiveSummarizer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = BartTokenizer.from_pretrained(model_name)
         self.model = BartForConditionalGeneration.from_pretrained(model_name).to(self.device)
-        self.max_input_length = 1024  # BART's max token length
-        self.max_output_length = 150  # Max length for generated summary
+        self.max_input_length = 1024
+        self.max_output_length = 150
+
+    def spacy_sent_tokenize(self, text):
+        """
+        Use spaCy to tokenize text into sentences.
+        
+        Parameters:
+        text (str): Input text.
+        
+        Returns:
+        list: List of sentences.
+        """
+        doc = nlp(text)
+        return [sent.text.strip() for sent in doc.sents]
 
     def preprocess_input(self, text):
         """
@@ -45,15 +54,12 @@ class AbstractiveSummarizer:
         str: Preprocessed text ready for summarization.
         """
         try:
-            # Apply existing preprocessing
             processed_text = preprocess_text(text)
-            # Split into sentences
-            sentences = sent_tokenize(processed_text)
-            # Join sentences to ensure coherent input
+            sentences = self.spacy_sent_tokenize(processed_text)
             return " ".join(sentences)
         except Exception as e:
             print(f"Error during preprocessing: {e}")
-            return text  # Fallback to original text
+            return text
 
     def chunk_text(self, text):
         """
@@ -65,14 +71,14 @@ class AbstractiveSummarizer:
         Returns:
         list: List of text chunks.
         """
-        sentences = sent_tokenize(text)
+        sentences = self.spacy_sent_tokenize(text)
         chunks = []
         current_chunk = []
         current_length = 0
 
         for sentence in sentences:
             sentence_tokens = self.tokenizer.encode(sentence, add_special_tokens=False)
-            if current_length + len(sentence_tokens) > self.max_input_length - 50:  # Buffer for special tokens
+            if current_length + len(sentence_tokens) > self.max_input_length - 50:
                 chunks.append(" ".join(current_chunk))
                 current_chunk = [sentence]
                 current_length = len(sentence_tokens)
@@ -105,8 +111,7 @@ class AbstractiveSummarizer:
                 return_tensors="pt"
             ).to(self.device)
 
-            # Calculate dynamic max_length based on num_sentences
-            avg_tokens_per_sentence = 20  # Approximate tokens per sentence
+            avg_tokens_per_sentence = 20
             dynamic_max_length = min(self.max_output_length, num_sentences * avg_tokens_per_sentence)
 
             summary_ids = self.model.generate(
@@ -138,29 +143,21 @@ class AbstractiveSummarizer:
             return "No text to summarize."
 
         try:
-            # Preprocess the input text
             processed_text = self.preprocess_input(text)
-
-            # Chunk the text if it's too long
             chunks = self.chunk_text(processed_text)
 
-            # Summarize each chunk
             summaries = []
-            sentences_per_chunk = max(1, num_sentences // max(1, len(chunks)))  # Distribute sentences
+            sentences_per_chunk = max(1, num_sentences // max(1, len(chunks)))
 
             for chunk in chunks:
                 summary = self.summarize_chunk(chunk, sentences_per_chunk)
                 if summary:
                     summaries.append(summary)
 
-            # Combine summaries
             final_summary = " ".join(summaries)
-
-            # Post-process to ensure approximate sentence count
-            final_sentences = sent_tokenize(final_summary)
+            final_sentences = self.spacy_sent_tokenize(final_summary)
             if len(final_sentences) > num_sentences:
-                final_sentences = final_sentences[:num_sentences]
-                final_summary = " ".join(final_sentences)
+                final_summary = " ".join(final_sentences[:num_sentences])
 
             return final_summary.strip() if final_summary else "Summarization failed."
         except Exception as e:
@@ -170,15 +167,8 @@ class AbstractiveSummarizer:
 # Example usage
 if __name__ == "__main__":
     sample_text = """
-    Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence concerned with the interactions between computers and human language, in particular how to program computers to process and analyze large amounts of natural language data. The goal is a computer capable of "understanding" the contents of documents, including the contextual nuances of the language within them. The technology can then accurately extract information and insights contained in the documents as well as categorize and organize the documents themselves.
-    
-    Challenges in natural language processing frequently involve speech recognition, natural language understanding, and natural language generation. The process of natural language processing has several steps including lexical analysis, parsing, semantic analysis, discourse integration, and pragmatic analysis. Each step has its own challenges and approaches.
-    
-    Modern NLP approaches are based on machine learning, especially statistical machine learning. Many different classes of machine-learning algorithms have been applied to natural-language-processing tasks. These algorithms take as input a large set of "features" that are generated from the input data.
-    
-    Some of the earliest-used machine learning algorithms, such as decision trees, produced systems of hard if-then rules similar to existing hand-written rules. However, part-of-speech tagging introduced the use of hidden Markov models to natural language processing, and increasingly, research has focused on statistical models, which make soft, probabilistic decisions based on attaching real-valued weights to the features making up the input data.
+    Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence...
     """
-    
     summarizer = AbstractiveSummarizer()
     summary = summarizer.abstractive_summarize(sample_text, num_sentences=3)
     print(f"Abstractive Summary:\n{summary}")
