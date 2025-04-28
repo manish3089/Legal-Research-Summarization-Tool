@@ -109,17 +109,17 @@
             gap: 20px;
         }
         
-        .summary-length, .language-selection {
+        .summary-detail, .language-selection {
             display: flex;
             align-items: center;
         }
         
-        .summary-length label, .language-selection label {
+        .summary-detail label, .language-selection label {
             margin-right: 10px;
             font-weight: 500;
         }
         
-        .summary-length select, .language-selection select {
+        .summary-detail select, .language-selection select {
             padding: 8px;
             border-radius: 5px;
             border: 1px solid #ccc;
@@ -357,13 +357,14 @@
             </div>
             
             <div class="controls">
-                <div class="summary-length">
-                    <label for="summaryLength">Summary Length:</label>
-                    <select id="summaryLength">
-                        <option value="3">Brief (3 sentences)</option>
-                        <option value="5" selected>Standard (5 sentences)</option>
-                        <option value="8">Detailed (8 sentences)</option>
-                        <option value="12">Comprehensive (12 sentences)</option>
+                <div class="summary-detail">
+                    <label for="summaryDetail">Summary Detail:</label>
+                    <select id="summaryDetail">
+                        <option value="auto" selected>Auto (AI Determined)</option>
+                        <option value="brief">Brief Overview</option>
+                        <option value="standard">Standard Analysis</option>
+                        <option value="detailed">Detailed Analysis</option>
+                        <option value="comprehensive">Comprehensive Analysis</option>
                     </select>
                 </div>
                 
@@ -418,7 +419,7 @@
             const browseBtn = document.getElementById('browseBtn');
             const analyzeBtn = document.getElementById('analyzeBtn');
             const filename = document.getElementById('filename');
-            const summaryLength = document.getElementById('summaryLength');
+            const summaryDetail = document.getElementById('summaryDetail');
             const targetLanguage = document.getElementById('targetLanguage');
             const loader = document.getElementById('loader');
             const resultsSection = document.getElementById('resultsSection');
@@ -503,7 +504,7 @@
                 
                 const formData = new FormData();
                 formData.append('file', selectedFile);
-                formData.append('summary_length', summaryLength.value);
+                formData.append('summary_detail', summaryDetail.value);
                 formData.append('target_language', targetLanguage.value);
                 
                 // Show loader, hide other sections
@@ -586,10 +587,15 @@
                         `Translated to: ${targetLanguage.options[targetLanguage.selectedIndex].text}` : 
                         'Original Language';
                     
+                    const detailLevel = summaryDetail.value !== 'auto' ?
+                        `Detail Level: ${summaryDetail.options[summaryDetail.selectedIndex].text}` :
+                        'Detail Level: AI Determined';
+                    
                     addMetadataItem('Document Info', [
                         `Filename: ${data.document.filename}`,
                         `Analysis Date: ${new Date(data.document.analyzed_at).toLocaleString()}`,
-                        languageInfo
+                        languageInfo,
+                        detailLevel
                     ]);
                 }
                 
@@ -659,6 +665,11 @@
                     targetLanguage.options[targetLanguage.selectedIndex].text : 
                     'Original Language';
                 
+                // Get detail level
+                const detailLevel = summaryDetail.value !== 'auto' ?
+                    summaryDetail.options[summaryDetail.selectedIndex].text :
+                    'AI Determined';
+                
                 // Create report content
                 let reportContent = `
                     # Forensic Document Analysis Report
@@ -667,6 +678,7 @@
                     - **Filename:** ${data.document.filename}
                     - **Analysis Date:** ${new Date(data.document.analyzed_at).toLocaleString()}
                     - **Language:** ${languageName}
+                    - **Detail Level:** ${detailLevel}
                     
                     ## Summary
                     ${data.summary}
