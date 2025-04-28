@@ -13,7 +13,7 @@ from nlp_module.text_preprocessing import extract_entities, preprocess_text
 nlp = spacy.load('en_core_web_sm')
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/api/*": {"origins": "http://127.0.0.1:5500/frontend/user_interface.html"}})
 
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
@@ -168,7 +168,7 @@ from flask_cors import CORS
 import PyPDF2
 import spacy
 from nlp_module.extractive_summarization import summarize
-from nlp_module.entity_extraction import extract_entities, preprocess_text
+from nlp_module.text_preprocessing import extract_entities, preprocess_text
 
 # Load spaCy model
 nlp = spacy.load('en_core_web_sm')
