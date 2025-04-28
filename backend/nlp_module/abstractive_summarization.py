@@ -9,6 +9,7 @@ from backend.nlp_module.text_preprocessing import preprocess_text
 from transformers import BartForConditionalGeneration, BartTokenizer
 import torch
 import spacy
+from nlp_module.text_preprocessing import preprocess_text
 
 # Load spaCy English model
 nlp = spacy.load("en_core_web_sm")
@@ -42,24 +43,6 @@ class AbstractiveSummarizer:
         """
         doc = nlp(text)
         return [sent.text.strip() for sent in doc.sents]
-
-    def preprocess_input(self, text):
-        """
-        Preprocess the input text using the existing preprocess_text function and sentence tokenization.
-        
-        Parameters:
-        text (str): Input text to preprocess.
-        
-        Returns:
-        str: Preprocessed text ready for summarization.
-        """
-        try:
-            processed_text = preprocess_text(text)
-            sentences = self.spacy_sent_tokenize(processed_text)
-            return " ".join(sentences)
-        except Exception as e:
-            print(f"Error during preprocessing: {e}")
-            return text
 
     def chunk_text(self, text):
         """
