@@ -1,3 +1,4 @@
+# backend/app.py
 import os
 import uuid
 import datetime
@@ -5,8 +6,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import PyPDF2
 import spacy
-from backend.nlp_module.extractive_summarization import summarize
-from backend.nlp_module.text_preprocessing import extract_entities, preprocess_text
+from nlp_module.extractive_summarization import extractive_summarize
+from nlp_module.text_preprocessing import extract_entities, preprocess_text
+
 # Load spaCy model
 nlp = spacy.load('en_core_web_sm')
 
@@ -82,7 +84,7 @@ class ForensicDocumentAnalyzer:
             
             metadata = self.extract_metadata(text)
             # Use our improved summarization module
-            summary = summarize(text, method=self.summary_method, top_n=summary_length)
+            summary = extractive_summarize(text, method=self.summary_method, top_n=summary_length)
             findings = self.extract_forensic_findings(text)
             
             # Get statistics
@@ -185,5 +187,3 @@ def analyze_document():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-
-
