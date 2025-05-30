@@ -319,7 +319,7 @@
 <body>
     <header>
         <div class="container">
-            <h1><i class="fas fa-search-plus"></i> Forensic Document Summarizer</h1>
+            <h1><i class="fas fa-search-plus"></i> Document Analyzer</h1>
             <p>Upload forensic documents for automated analysis and summarization</p>
         </div>
     </header>
@@ -513,7 +513,7 @@
                 hideError();
                 
                 // Make API request
-                fetch('http://localhost:5000/api/analyze', {
+                fetch('http://127.0.0.1:5000/api/analyze', {
                     method: 'POST',
                     body: formData
                 })
