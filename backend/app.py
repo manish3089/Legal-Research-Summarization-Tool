@@ -1,4 +1,3 @@
-# backend/app.py
 import os
 import uuid
 import datetime
@@ -6,9 +5,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import PyPDF2
 import spacy
-from nlp_module.extractive_summarization import summarize
-from nlp_module.text_preprocessing import extract_entities, preprocess_text
-
+from backend.nlp_module.extractive_summarization import summarize
+from backend.nlp_module.text_preprocessing import extract_entities, preprocess_text
 # Load spaCy model
 nlp = spacy.load('en_core_web_sm')
 
@@ -187,3 +185,5 @@ def analyze_document():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+
+
