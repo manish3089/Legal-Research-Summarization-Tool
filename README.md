@@ -38,6 +38,8 @@ git clone https://github.com/february-king/AI-Powered-Forensic-Document-Summariz
 cd AI-Powered-Forensic-Document-Summarization-System
 pip install -r requirements.txt
 
+---
+
 ## 🚀 Usage
 # Run Flask server
 python app.py
