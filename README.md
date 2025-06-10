@@ -1,4 +1,3 @@
-# AI-Powered Forensic Document Summarization System
 # 🕵️‍♂️ AI-Powered Forensic Document Summarization System
 
 This project aims to build a robust NLP-powered tool that extracts key insights and summarizes forensic and legal documents using both extractive and abstractive summarization techniques. Designed with forensic analysts, legal professionals, and investigators in mind, the system simplifies the reading and analysis of complex documents.
