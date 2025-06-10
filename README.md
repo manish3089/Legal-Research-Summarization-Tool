@@ -49,23 +49,21 @@ python app.py
 ## 🧪 Summarization Approaches
 Extractive
 
-TextRank
-
-BERT-based Sentence Embedding + Cosine Similarity
+- TextRank
+- BERT-based Sentence Embedding + Cosine Similarity
 
 Abstractive
 
-T5 (Text-To-Text Transfer Transformer)
-
-BART (Bidirectional Auto-Regressive Transformer)
+- T5 (Text-To-Text Transfer Transformer)
+- BART (Bidirectional Auto-Regressive Transformer)
 
 ---
 
 ## 📚 Use Case Examples
-Legal case report summarization
+- Legal case report summarization
 
-Criminal investigation note simplification
+- Criminal investigation note simplification
 
-Crime scene documentation analysis
+- Crime scene documentation analysis
 
-Forensic evidence narration parsing
+- Forensic evidence narration parsing
