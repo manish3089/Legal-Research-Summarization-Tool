@@ -42,7 +42,8 @@ pip install -r requirements.txt
 
 ## 🚀 Usage
  Run Flask server
-python app.py
+```python app.py
+```
 
 ---
 
