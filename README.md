@@ -26,7 +26,6 @@ This project aims to build a robust NLP-powered tool that extracts key insights 
 | ML/NLP Models    | BERT, T5, BART, TextRank |
 | Preprocessing    | SpaCy, NLTK, Regex |
 | Database         | MongoDB      |
-| Frontend (Optional) | React / Streamlit |
 | Hosting (Phase 2)   | Google Cloud / Render |
 
 ---
