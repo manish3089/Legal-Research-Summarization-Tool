@@ -37,14 +37,16 @@ This project aims to build a robust NLP-powered tool that extracts key insights 
 git clone https://github.com/february-king/AI-Powered-Forensic-Document-Summarization-System.git
 cd AI-Powered-Forensic-Document-Summarization-System
 pip install -r requirements.txt
-
+```
 ---
 
 ## 🚀 Usage
-# Run Flask server
+ Run Flask server
 python app.py
 
-##🧪 Summarization Approaches
+---
+
+## 🧪 Summarization Approaches
 Extractive
 
 TextRank
@@ -57,7 +59,9 @@ T5 (Text-To-Text Transfer Transformer)
 
 BART (Bidirectional Auto-Regressive Transformer)
 
-##📚 Use Case Examples
+---
+
+## 📚 Use Case Examples
 Legal case report summarization
 
 Criminal investigation note simplification
