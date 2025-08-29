@@ -1,0 +1,143 @@
+import os
+import faiss
+import numpy as np
+import textwrap
+from sentence_transformers import SentenceTransformer
+from openai import OpenAI
+
+# -------------------------
+# Step 1: Load text files
+# -------------------------
+def load_documents(folder_path):
+    documents = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".txt"):
+            with open(os.path.join(folder_path, filename), "r", encoding="utf-8") as f:
+                text = f.read()
+                documents.append({"filename": filename, "content": text})
+    return documents
+
+# -------------------------
+# Step 2: Preprocess & Chunk text
+# -------------------------
+def chunk_text(text, chunk_size=500, overlap=50):
+    words = text.split()
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = min(start + chunk_size, len(words))
+        chunk = " ".join(words[start:end])
+        chunks.append(chunk)
+        start += chunk_size - overlap
+    return chunks
+
+# -------------------------
+# Step 3: Create embeddings
+# -------------------------
+def create_embeddings(docs, model_name="sentence-transformers/all-MiniLM-L6-v2"):
+    model = SentenceTransformer(model_name)
+    embeddings, metadata = [], []
+    
+    for doc in docs:
+        chunks = chunk_text(doc["content"])
+        for i, chunk in enumerate(chunks):
+            vector = model.encode(chunk)
+            embeddings.append(vector)
+            metadata.append({
+                "filename": doc["filename"],
+                "chunk_id": i,
+                "content": chunk
+            })
+    return np.array(embeddings), metadata, model
+
+# -------------------------
+# Step 4: Build FAISS Index
+# -------------------------
+def build_faiss_index(embeddings):
+    dimension = embeddings.shape[1]
+    index = faiss.IndexFlatL2(dimension)
+    index.add(embeddings)
+    return index
+
+# -------------------------
+# Step 5: Query Function
+# -------------------------
+def search(query, model, index, metadata, top_k=5):
+    query_vec = model.encode([query])
+    D, I = index.search(np.array(query_vec), k=top_k)
+    results = []
+    for idx in I[0]:
+        results.append(metadata[idx])
+    return results
+
+# -------------------------
+# Step 6: Generate Answer with LLM
+# -------------------------
+def generate_answer(query, context_chunks, client):
+    context_text = "\n\n".join([f"From {c['filename']}:\n{c['content']}" for c in context_chunks])
+    
+    prompt = f"""
+    You are a legal research assistant. 
+    Use the following legal documents to answer the question. 
+    Be precise, cite case names or sections if available.
+
+    User Query: {query}
+
+    Relevant Legal Documents:
+    {context_text}
+
+    Answer:
+    """
+    
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",  # You can switch to gpt-4 or gpt-3.5
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2
+    )
+    
+    return response.choices[0].message.content
+
+# -------------------------
+# Main Script
+# -------------------------
+if __name__ == "__main__":
+    folder = "legal_docs"  # <-- put your 200 txt files here
+    documents = load_documents(folder)
+    
+    print(f"📂 Loaded {len(documents)} legal documents.")
+    
+    # Create embeddings
+    embeddings, metadata, model = create_embeddings(documents)
+    
+    # Build FAISS index
+    index = build_faiss_index(embeddings)
+    print(f"✅ Indexed {len(metadata)} text chunks.")
+    
+    # Initialize OpenAI client (make sure to set your API key as env variable)
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    
+    # Interactive Query Loop
+    print("\n⚖️ Legal RAG Assistant is ready! Type your query below.")
+    print("Type 'exit' to quit.\n")
+    
+    while True:
+        query = input("❓ Your Query: ")
+        if query.lower() in ["exit", "quit"]:
+            print("👋 Exiting Legal Research Assistant. Goodbye!")
+            break
+        
+        # Retrieve top chunks
+        results = search(query, model, index, metadata, top_k=5)
+        
+        # Show retrieved chunks (optional)
+        print("\n📌 Retrieved Context Chunks:")
+        for r in results:
+            print(f"📄 File: {r['filename']} | Chunk: {r['chunk_id']}")
+            print(textwrap.fill(r['content'], width=80))
+            print("-" * 80)
+        
+        # Generate final answer with LLM
+        answer = generate_answer(query, results, client)
+        print("\n🤖 Assistant Answer:\n")
+        print(textwrap.fill(answer, width=90))
+        print("=" * 90)
