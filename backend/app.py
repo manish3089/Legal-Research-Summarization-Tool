@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import PyPDF2
 import spacy
-from nlp_module.extractive_summarization import extractive_summarize
+from nlp_module.extractive_summarization import summarize
 from nlp_module.text_preprocessing import extract_entities, preprocess_text
 
 # Load spaCy model
@@ -84,7 +84,7 @@ class ForensicDocumentAnalyzer:
             
             metadata = self.extract_metadata(text)
             # Use our improved summarization module
-            summary = extractive_summarize(text, method=self.summary_method, top_n=summary_length)
+            summary = summarize(text, method=self.summary_method, top_n=summary_length)
             findings = self.extract_forensic_findings(text)
             
             # Get statistics
