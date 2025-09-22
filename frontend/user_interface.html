@@ -199,36 +199,63 @@
     fileInput.addEventListener('change', () => {
         analyzeBtn.disabled = fileInput.files.length === 0;
     });
-
     analyzeBtn.addEventListener('click', async () => {
-        const file = fileInput.files[0];
-        if (!file) return;
+    const file = fileInput.files[0];
+    if (!file) return;
 
-        summaryArea.innerHTML = `<p><strong>Analyzing ${file.name}...</strong></p>`;
+    summaryArea.innerHTML = `<p><strong>Analyzing ${file.name}...</strong></p>`;
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('summary_detail', 'standard'); // You can add a dropdown for this if needed
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('summary_detail', 'standard');
 
-        try {
-            const response = await fetch('http://127.0.0.1:5000/api/analyze', {
-                method: 'POST',
-                body: formData
-            });
+    try {
+        const response = await fetch('http://127.0.0.1:5000/api/analyze', {
+            method: 'POST',
+            body: formData
+        });
 
-            if (!response.ok) {
-                throw new Error('Server error: ' + response.statusText);
-            }
-
-            const result = await response.json();
-            summaryArea.innerHTML = `
-                <p><strong>Summary:</strong> ${result.summary || 'No summary returned.'}</p>
-                <pre>${JSON.stringify(result, null, 2)}</pre>
-            `;
-        } catch (err) {
-            summaryArea.innerHTML = `<p style="color:red;">Failed to fetch summary: ${err.message}</p>`;
+        if (!response.ok) {
+            throw new Error('Server error: ' + response.statusText);
         }
-    });
+
+        const result = await response.json();
+        summaryArea.innerHTML = `
+            <div style="background:#fff;border:1px solid #ccc;padding:16px;border-radius:8px;max-height:300px;overflow:auto;margin-bottom:16px;">
+                <h3 style="margin-top:0;color:#3498db;">Summary</h3>
+                <p style="white-space:pre-line;font-size:1.1em;">${result.summary ? result.summary : '<em>No summary returned.</em>'}</p>
+            </div>
+            <div style="background:#f5f7fa;border:1px solid #eee;padding:12px;border-radius:8px;margin-bottom:16px;">
+                <h4 style="margin-top:0;color:#2c3e50;">Metadata</h4>
+                <ul style="padding-left:18px;">
+                    <li><strong>Case Number:</strong> ${result.metadata && result.metadata.case_number ? result.metadata.case_number : 'N/A'}</li>
+                    <li><strong>Dates:</strong> ${result.metadata && result.metadata.dates ? result.metadata.dates.join(', ') : 'N/A'}</li>
+                    <li><strong>Locations:</strong> ${result.metadata && result.metadata.locations ? result.metadata.locations.join(', ') : 'N/A'}</li>
+                    <li><strong>Organizations:</strong> ${result.metadata && result.metadata.organizations ? result.metadata.organizations.join(', ') : 'N/A'}</li>
+                    <li><strong>People:</strong> ${result.metadata && result.metadata.people ? result.metadata.people.join(', ') : 'N/A'}</li>
+                </ul>
+            </div>
+            <div style="background:#f5f7fa;border:1px solid #eee;padding:12px;border-radius:8px;margin-bottom:16px;">
+                <h4 style="margin-top:0;color:#2c3e50;">Statistics</h4>
+                <ul style="padding-left:18px;">
+                    <li><strong>Word Count:</strong> ${result.statistics && result.statistics.word_count ? result.statistics.word_count : 'N/A'}</li>
+                    <li><strong>Sentence Count:</strong> ${result.statistics && result.statistics.sentence_count ? result.statistics.sentence_count : 'N/A'}</li>
+                    <li><strong>Summary Length:</strong> ${result.statistics && result.statistics.summary_length ? result.statistics.summary_length : 'N/A'}</li>
+                </ul>
+            </div>
+            <div style="background:#f5f7fa;border:1px solid #eee;padding:12px;border-radius:8px;">
+                <h4 style="margin-top:0;color:#2c3e50;">Key Findings</h4>
+                <ul style="padding-left:18px;">
+                    ${result.key_findings && result.key_findings.length ? result.key_findings.map(f => `<li>${f}</li>`).join('') : '<li>No key findings.</li>'}
+                </ul>
+            </div>
+        `;
+    } catch (err) {
+        summaryArea.innerHTML = `<p style="color:red;">Failed to fetch summary: ${err.message}</p>`;
+    }
+});
+
+
 </script>
 
 </body>
