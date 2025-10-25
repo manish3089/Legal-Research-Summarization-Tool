@@ -2,8 +2,9 @@ import os
 import faiss
 import numpy as np
 import textwrap
+import torch
 from sentence_transformers import SentenceTransformer
-from openai import OpenAI
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 # -------------------------
 # Step 1: Load text files
@@ -71,31 +72,41 @@ def search(query, model, index, metadata, top_k=5):
     return results
 
 # -------------------------
-# Step 6: Generate Answer with LLM
+# Step 6: Generate Answer with LexT5 (Optimized)
 # -------------------------
-def generate_answer(query, context_chunks, client):
-    context_text = "\n\n".join([f"From {c['filename']}:\n{c['content']}" for c in context_chunks])
+def generate_answer(query, context_chunks, tokenizer, model, device):
+    # LexT5 is trained for summarization, so we format it accordingly
+    # Combine context into a coherent document
+    context_text = "\n".join([c['content'][:400] for c in context_chunks[:3]])
     
-    prompt = f"""
-    You are a legal research assistant. 
-    Use the following legal documents to answer the question. 
-    Be precise, cite case names or sections if available.
-
-    User Query: {query}
-
-    Relevant Legal Documents:
-    {context_text}
-
-    Answer:
-    """
+    # LexT5 models work best with direct summarization prompts
+    # Format: "summarize: <text>" or "question: <q> context: <c>"
+    prompt = f"question: {query} context: {context_text}"
     
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",  # You can switch to gpt-4 or gpt-3.5
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2
-    )
+    # Tokenize with appropriate length for legal text
+    inputs = tokenizer(
+        prompt, 
+        return_tensors="pt", 
+        max_length=1024,  # LexT5 can handle longer context
+        truncation=True,
+        padding=True
+    ).to(device)
     
-    return response.choices[0].message.content
+    # Generate with settings optimized for legal text
+    with torch.no_grad():  # Disable gradient computation for speed
+        outputs = model.generate(
+            **inputs,
+            max_length=200,      # Reasonable answer length
+            min_length=20,       # Ensure substantial answer
+            num_beams=3,         # Balance quality/speed
+            length_penalty=1.0,  # Neutral length preference
+            early_stopping=True,
+            no_repeat_ngram_size=3
+        )
+    
+    # Decode the response
+    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return answer
 
 # -------------------------
 # Main Script
@@ -107,14 +118,32 @@ if __name__ == "__main__":
     print(f"📂 Loaded {len(documents)} legal documents.")
     
     # Create embeddings
-    embeddings, metadata, model = create_embeddings(documents)
+    embeddings, metadata, embedding_model = create_embeddings(documents)
     
     # Build FAISS index
     index = build_faiss_index(embeddings)
     print(f"✅ Indexed {len(metadata)} text chunks.")
     
-    # Initialize OpenAI client (make sure to set your API key as env variable)
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    # Load LexT5 model for answer generation
+    print("🔄 Loading LexT5 model...")
+    
+    # Choose model based on your computational resources:
+    # "pszemraj/LexT5-small" - 60M params (fastest, good for CPU)
+    # "pszemraj/LexT5-base" - 220M params (balanced)
+    # "pszemraj/LexT5-large" - 770M params (best quality, needs GPU)
+    
+    model_name = "pszemraj/LexT5-small"  # Change this to base or large if needed
+    
+    # Detect device (GPU if available, else CPU)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"💻 Using device: {device}")
+    print(f"📦 Model: {model_name}")
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    llm_model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    llm_model.to(device)  # Move model to GPU if available
+    llm_model.eval()  # Set to evaluation mode for faster inference
+    print("✅ Model loaded successfully!")
     
     # Interactive Query Loop
     print("\n⚖️ Legal RAG Assistant is ready! Type your query below.")
@@ -127,7 +156,7 @@ if __name__ == "__main__":
             break
         
         # Retrieve top chunks
-        results = search(query, model, index, metadata, top_k=5)
+        results = search(query, embedding_model, index, metadata, top_k=5)
         
         # Show retrieved chunks (optional)
         print("\n📌 Retrieved Context Chunks:")
@@ -136,8 +165,8 @@ if __name__ == "__main__":
             print(textwrap.fill(r['content'], width=80))
             print("-" * 80)
         
-        # Generate final answer with LLM
-        answer = generate_answer(query, results, client)
+        # Generate final answer with LexT5
+        answer = generate_answer(query, results, tokenizer, llm_model, device)
         print("\n🤖 Assistant Answer:\n")
         print(textwrap.fill(answer, width=90))
         print("=" * 90)
