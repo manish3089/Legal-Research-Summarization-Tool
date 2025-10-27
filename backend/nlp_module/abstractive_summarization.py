@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 from backend.nlp_module.text_preprocessing import preprocess_text
 
-from transformers import BartForConditionalGeneration, BartTokenizer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 import spacy
 from nlp_module.text_preprocessing import preprocess_text
@@ -23,7 +23,7 @@ class AbstractiveSummarizer:
     """
     A class to perform abstractive summarization using BART model.
     """
-    def __init__(self, model_name="facebook/bart-large-cnn"):
+    def __init__(self, model_name="santoshtyss/lt5-small"):
         """
         Initialize the BART model and tokenizer.
         
@@ -31,8 +31,8 @@ class AbstractiveSummarizer:
         model_name (str): Name of the pretrained BART model to use.
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.tokenizer = BartTokenizer.from_pretrained(model_name)
-        self.model = BartForConditionalGeneration.from_pretrained(model_name).to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
         self.max_input_length = 1024
         self.max_output_length = 150
 
