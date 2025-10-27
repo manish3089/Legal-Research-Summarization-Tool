@@ -1,8 +1,13 @@
 import sys
 import os
+import logging
 
 # Add the project root directory to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+# Configure logger for this module
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 from backend.nlp_module.text_preprocessing import preprocess_text
 
@@ -108,7 +113,7 @@ class AbstractiveSummarizer:
             summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
             return summary
         except Exception as e:
-            print(f"Error during chunk summarization: {e}")
+            logger.error(f"Error during chunk summarization: {e}")
             return ""
 
     def abstractive_summarize(self, text, num_sentences=3):
@@ -144,14 +149,15 @@ class AbstractiveSummarizer:
 
             return final_summary.strip() if final_summary else "Summarization failed."
         except Exception as e:
-            print(f"Error during abstractive summarization: {e}")
+            logger.error(f"Error during abstractive summarization: {e}")
             return f"Summarization error: {e}"
 
 # Example usage
 if __name__ == "__main__":
+    # Demo usage when running this module directly. Uses logging instead of printing
     sample_text = """
     Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence...
     """
     summarizer = AbstractiveSummarizer()
     summary = summarizer.abstractive_summarize(sample_text, num_sentences=3)
-    print(f"Abstractive Summary:\n{summary}")
+    logger.info("Abstractive Summary (demo):\n%s", summary)

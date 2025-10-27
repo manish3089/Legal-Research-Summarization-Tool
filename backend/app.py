@@ -1,6 +1,7 @@
 import os
 import uuid
 import datetime
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import PyPDF2
@@ -8,6 +9,10 @@ import spacy
 
 from nlp_module.extractive_summarization import summarize
 from nlp_module.text_preprocessing import extract_entities, preprocess_text
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 # Load spaCy model
 nlp = spacy.load('en_core_web_sm')
@@ -37,7 +42,7 @@ class ForensicDocumentAnalyzer:
                 text = ''.join(page.extract_text() or '' for page in reader.pages)
             return text
         except Exception as e:
-            print(f"[ERROR] PDF extraction: {e}")
+            logger.error(f"PDF extraction: {e}")
             return ""
 
     def extract_metadata(self, text):
@@ -52,7 +57,7 @@ class ForensicDocumentAnalyzer:
                 'locations': entities.get('GPE', [])[:3]
             }
         except Exception as e:
-            print(f"[ERROR] Metadata extraction: {e}")
+            logger.error(f"Metadata extraction: {e}")
             return {"error": str(e)}
 
     def extract_forensic_findings(self, text):
@@ -70,7 +75,7 @@ class ForensicDocumentAnalyzer:
                     findings.append(sentence)
             return findings[:5]
         except Exception as e:
-            print(f"[ERROR] Forensic findings extraction: {e}")
+            logger.error(f"Forensic findings extraction: {e}")
             return []
 
     def analyze_document(self, file_path, summary_length=5):
@@ -101,7 +106,7 @@ class ForensicDocumentAnalyzer:
                 }
             }
         except Exception as e:
-            print(f"[ERROR] Document analysis: {e}")
+            logger.error(f"Document analysis: {e}")
             return {"error": str(e)}
 
 analyzer = ForensicDocumentAnalyzer()
@@ -114,23 +119,23 @@ def test_api():
 @app.route('/api/analyze', methods=['POST'])
 def analyze_document():
     if 'file' not in request.files:
-        print("[ERROR] No file part in request")
+        logger.error("No file part in request")
         return jsonify({'error': 'No file part'}), 400
 
     file = request.files['file']
     if not file.filename:
-        print("[ERROR] No selected file")
+        logger.error("No selected file")
         return jsonify({'error': 'No selected file'}), 400
 
     if not file.filename.lower().endswith('.pdf'):
-        print("[ERROR] File must be a PDF")
+        logger.error("File must be a PDF")
         return jsonify({'error': 'File must be a PDF'}), 400
 
     filename = f"{uuid.uuid4()}.pdf"
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     try:
         file.save(file_path)
-        print(f"[INFO] File saved: {file_path}")
+        logger.info(f"File saved: {file_path}")
 
         summary_detail = request.form.get('summary_detail', 'auto')
         summary_length = {
@@ -141,14 +146,14 @@ def analyze_document():
         }.get(summary_detail, 5)
 
         target_language = request.form.get('target_language', 'original')
-        print(f"[INFO] Processing file: {file.filename}")
-        print(f"[INFO] Summary detail: {summary_detail}, Length: {summary_length}")
-        print(f"[INFO] Target language: {target_language}")
+        logger.info(f"Processing file: {file.filename}")
+        logger.info(f"Summary detail: {summary_detail}, Length: {summary_length}")
+        logger.info(f"Target language: {target_language}")
 
         result = analyzer.analyze_document(file_path, summary_length)
 
         if 'error' in result:
-            print(f"[ERROR] Analysis error: {result['error']}")
+            logger.error(f"Analysis error: {result['error']}")
             return jsonify(result), 500
 
         result['document'] = {
@@ -157,19 +162,21 @@ def analyze_document():
             'id': filename.split('.')[0]
         }
 
-        print(f"[INFO] Analysis completed. Summary length: {result['statistics']['summary_length']} words")
+        logger.info(f"Analysis completed. Summary length: {result['statistics']['summary_length']} words")
         return jsonify(result)
     except Exception as e:
-        print(f"[ERROR] Exception in analyze_document: {e}")
+        logger.exception(f"Exception in analyze_document: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         # Clean up the uploaded file
         if os.path.exists(file_path):
             try:
                 os.remove(file_path)
-                print(f"[INFO] Temporary file removed: {file_path}")
+                logger.info(f"Temporary file removed: {file_path}")
             except Exception as e:
-                print(f"[ERROR] Error removing file: {e}")
+                logger.error(f"Error removing file: {e}")
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # In development we may want debug=True, but disable the reloader to avoid
+    # duplicate startup logs / double-execution of top-level code.
+    app.run(debug=True, port=5000, use_reloader=False)
