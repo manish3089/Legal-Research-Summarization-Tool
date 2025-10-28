@@ -7,7 +7,7 @@ import json
 # PAGE CONFIGURATION
 # -----------------------------------
 st.set_page_config(
-    page_title="Forensic Legal Summarization Tool",
+    page_title=" Easy Edicts",
     page_icon="⚖️",
     layout="wide",
 )
@@ -123,8 +123,8 @@ if lottie_ai:
 # -----------------------------------
 # HEADER
 # -----------------------------------
-st.markdown("<h1>⚖️ Forensic Legal Summarization Tool</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center; color:#ddd;'>AI-powered analysis and summarization of legal documents</p>", unsafe_allow_html=True)
+st.markdown("<h1>⚖️ Easy Edicts</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; color:#ddd;'>AI-Powered Analysis of Legal Documents</p>", unsafe_allow_html=True)
 st.write("")
 
 # -----------------------------------
