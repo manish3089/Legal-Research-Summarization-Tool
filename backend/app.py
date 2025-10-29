@@ -7,8 +7,8 @@ from flask_cors import CORS
 import PyPDF2
 import spacy
 
-from nlp_module.extractive_summarization import summarize
 from nlp_module.text_preprocessing import extract_entities, preprocess_text
+from nlp_module.abstractive_summarization import AbstractiveSummarizer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
@@ -32,6 +32,7 @@ class ForensicDocumentAnalyzer:
         }
         for term in self.keep_terms:
             self.stop_words.discard(term)
+        self.summarizer = AbstractiveSummarizer()
         self.summary_method = 'hybrid'
 
     def extract_text_from_pdf(self, pdf_path):
@@ -87,7 +88,10 @@ class ForensicDocumentAnalyzer:
 
             preprocessed_text = preprocess_text(text)
             metadata = self.extract_metadata(text)
-            summary = summarize(text, method=self.summary_method, top_n=summary_length)
+            
+            # Get hybrid summary
+            summary_results = self.summarizer.hybrid_summarize(text, num_sentences=summary_length)
+            summary = summary_results['combined_summary']
             findings = self.extract_forensic_findings(text)
 
             doc = nlp(text)
@@ -98,6 +102,8 @@ class ForensicDocumentAnalyzer:
             return {
                 'metadata': metadata,
                 'summary': summary,
+                'extractive_summary': summary_results['extractive_summary'],
+                'abstractive_summary': summary_results['abstractive_summary'],
                 'key_findings': findings,
                 'statistics': {
                     'word_count': word_count,
