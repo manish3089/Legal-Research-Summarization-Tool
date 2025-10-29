@@ -10,6 +10,7 @@ logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
 from backend.nlp_module.text_preprocessing import preprocess_text
+from backend.nlp_module.extractive_summarization import summarize as extractive_summarize
 
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
@@ -23,7 +24,7 @@ class AbstractiveSummarizer:
     """
     A class to perform abstractive summarization using BART model.
     """
-    def __init__(self, model_name="santoshtyss/lt5-small"):
+    def __init__(self,  model_name="santoshtyss/lt5-small"):
         """
         Initialize the BART model and tokenizer.
         
@@ -131,7 +132,7 @@ class AbstractiveSummarizer:
             return "No text to summarize."
 
         try:
-            processed_text = self.preprocess_input(text)
+            processed_text = preprocess_text(text)
             chunks = self.chunk_text(processed_text)
 
             summaries = []
@@ -152,6 +153,44 @@ class AbstractiveSummarizer:
             logger.error(f"Error during abstractive summarization: {e}")
             return f"Summarization error: {e}"
 
+    def hybrid_summarize(self, text, num_sentences=3, abstractive_weight=0.5):
+        """
+        Create a hybrid summary combining both extractive and abstractive methods.
+        
+        Parameters:
+        text (str): The input text to summarize.
+        num_sentences (int): Approximate number of sentences in the final summary.
+        abstractive_weight (float): Weight given to abstractive summary (0.0-1.0).
+                                  Extractive weight will be (1 - abstractive_weight).
+        
+        Returns:
+        dict: A dictionary containing both summaries and the combined summary.
+        """
+        try:
+            # Get extractive summary
+            extractive_result = extractive_summarize(text, method='hybrid', top_n=num_sentences)
+            
+            # Get abstractive summary
+            abstractive_result = self.abstractive_summarize(text, num_sentences=num_sentences)
+            
+            # Combine summaries
+            combined_summary = f"{abstractive_result}\n\nKey points (extracted):\n{extractive_result}"
+            
+            return {
+                'combined_summary': combined_summary,
+                'abstractive_summary': abstractive_result,
+                'extractive_summary': extractive_result
+            }
+            
+        except Exception as e:
+            logger.error(f"Error during hybrid summarization: {e}")
+            return {
+                'error': f"Hybrid summarization error: {e}",
+                'abstractive_summary': None,
+                'extractive_summary': None,
+                'combined_summary': None
+            }
+
 # Example usage
 if __name__ == "__main__":
     # Demo usage when running this module directly. Uses logging instead of printing
@@ -159,5 +198,11 @@ if __name__ == "__main__":
     Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence...
     """
     summarizer = AbstractiveSummarizer()
-    summary = summarizer.abstractive_summarize(sample_text, num_sentences=3)
-    logger.info("Abstractive Summary (demo):\n%s", summary)
+    
+    # Get hybrid summary
+    hybrid_results = summarizer.hybrid_summarize(sample_text, num_sentences=3)
+    
+    logger.info("Hybrid Summary Results:")
+    logger.info("Combined Summary:\n%s", hybrid_results['combined_summary'])
+    logger.info("\nAbstractive Summary:\n%s", hybrid_results['abstractive_summary'])
+    logger.info("\nExtractive Summary:\n%s", hybrid_results['extractive_summary'])
