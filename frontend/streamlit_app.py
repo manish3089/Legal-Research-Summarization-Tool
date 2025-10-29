@@ -7,7 +7,7 @@ import json
 # PAGE CONFIGURATION
 # -----------------------------------
 st.set_page_config(
-    page_title=" Easy Edicts",
+    page_title=" RETRIEVAL – AUGMENTED LEGAL INSIGHT GENERATOR",
     page_icon="⚖️",
     layout="wide",
 )
@@ -132,7 +132,7 @@ st.write("")
 # -----------------------------------
 tab = st.radio(
     "Navigation",
-    ["📄 Document Summarization", "🔍 Search (Coming Soon)"],
+    ["📄 Document Summarization", "🔍 Search "],
     horizontal=True,
     label_visibility="collapsed"
 )

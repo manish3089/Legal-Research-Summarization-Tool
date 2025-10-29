@@ -15,3 +15,5 @@ matplotlib
 seaborn
 python-dotenv
 streamlit-lottie
+datasets
+pyarrow>=15.0.0
