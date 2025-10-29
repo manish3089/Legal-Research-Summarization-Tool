@@ -7,7 +7,7 @@ import json
 # PAGE CONFIGURATION
 # -----------------------------------
 st.set_page_config(
-    page_title=" RETRIEVAL – AUGMENTED LEGAL INSIGHT GENERATOR",
+    page_title=" RETRIEVAL AUGMENTED LEGAL INSIGHT GENERATOR",
     page_icon="⚖️",
     layout="wide",
 )
@@ -123,7 +123,7 @@ if lottie_ai:
 # -----------------------------------
 # HEADER
 # -----------------------------------
-st.markdown("<h1>⚖️ Easy Edicts</h1>", unsafe_allow_html=True)
+st.markdown("<h1>⚖️ RETRIEVAL AUGMENTED LEGAL INSIGHT GENERATOR</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center; color:#ddd;'>AI-Powered Analysis of Legal Documents</p>", unsafe_allow_html=True)
 st.write("")
 
