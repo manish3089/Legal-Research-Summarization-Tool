@@ -18,48 +18,16 @@ stop_words = set(stopwords.words('english'))
 
 # preprocess_text function (unchanged)
 def preprocess_text(text):
-    if not text:
-        raise ValueError("Input text cannot be empty.")
-
-    case_ids = re.findall(r'(Case\s*No\.?\s*\d+/\d+)', text)
-    case_ids_lower = [cid.lower() for cid in case_ids]
-
-    doc = nlp(text)
+    """Minimal preprocessing for legal documents."""
     
-    entity_spans = []
-    for ent in doc.ents:
-        if ent.label_ in ['DATE', 'CARDINAL', 'ORDINAL']:
-            entity_spans.append((ent.start, ent.end, ent.text.lower()))
+    # Remove XML-like tags
+    text = re.sub(r'<[^>]+>', '', text)
     
-    lemmas = case_ids_lower.copy()
-    i = 0
-    while i < len(doc):
-        is_in_entity = False
-        entity_text = None
-        
-        for start, end, text in entity_spans:
-            if start <= i < end:
-                is_in_entity = True
-                entity_text = text
-                i = end
-                break
-        
-        if is_in_entity:
-            if entity_text not in lemmas:
-                lemmas.append(entity_text)
-        else:
-            token = doc[i]
-            if not any(token.text.lower() in cid for cid in case_ids_lower):
-                if token.ent_type_ in ['DATE', 'CARDINAL', 'ORDINAL', 'TIME']:
-                    lemmas.append(token.text.lower())
-                elif token.is_alpha and token.text.lower() not in stop_words:
-                    lemmas.append(token.lemma_.lower())
-            i += 1
-
-    preprocessed_text = " ".join(lemmas)
-    preprocessed_text = re.sub(r'\s+([.,:;!?])', r'\1', preprocessed_text)
-    preprocessed_text = re.sub(r'([.,:;!?])\s+', r'\1 ', preprocessed_text)
-    return preprocessed_text.strip()
+    # Remove excessive whitespace
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    
+    return text
 
 def extract_entities(text):
     """

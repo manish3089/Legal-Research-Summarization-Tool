@@ -336,3 +336,42 @@ yarl @ file:///C:/ci/yarl_1606940155993/work
 zict==2.0.0
 zipp @ file:///opt/conda/conda-bld/zipp_1641824620731/work
 zope.interface @ file:///C:/ci/zope.interface_1625036252485/work
+flask
+spacy
+nltk
+torch>=2.0.0
+transformers>=4.34.0
+sentence-transformers
+scikit-learn
+pymongo
+pdfminer.six
+python-docx
+numpy
+pandas
+streamlit
+matplotlib
+seaborn
+python-dotenv
+streamlit-lottie
+datasets
+pyarrow>=15.0.0
+flask
+spacy
+nltk
+transformers
+torch
+setuptools<81.0.0  # Pin setuptools to avoid pkg_resources deprecation warning
+sentence-transformers
+scikit-learn
+pymongo
+pdfminer.six
+python-docx
+numpy
+pandas
+streamlit
+matplotlib
+seaborn
+python-dotenv
+streamlit-lottie
+datasets
+pyarrow>=15.0.0

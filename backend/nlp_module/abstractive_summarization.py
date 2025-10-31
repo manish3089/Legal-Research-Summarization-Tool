@@ -15,27 +15,28 @@ from backend.nlp_module.extractive_summarization import summarize as extractive_
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 import spacy
-from nlp_module.text_preprocessing import preprocess_text
 
 # Load spaCy English model
 nlp = spacy.load("en_core_web_sm")
 
 class AbstractiveSummarizer:
     """
-    A class to perform abstractive summarization using BART model.
+    A class to perform abstractive summarization using t5 model.
     """
-    def __init__(self,  model_name="santoshtyss/lt5-small"):
+    def __init__(self, model_name="santoshtyss/lt5-small"):
         """
-        Initialize the BART model and tokenizer.
+        Initialize the LT5 model and tokenizer.
         
         Parameters:
-        model_name (str): Name of the pretrained BART model to use.
+        model_name (str): Name of the pretrained LT5 model to use.
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
-        self.max_input_length = 1024
-        self.max_output_length = 150
+        # Use model's actual max length, not arbitrary value
+        self.max_input_length = getattr(self.model.config, 'n_positions', 512)  # Should be 512 for T5
+        self.max_output_length = 512  # Significantly increased for longer summaries
+        logger.info(f"Model max input length: {self.max_input_length}")
 
     def spacy_sent_tokenize(self, text):
         """
@@ -52,7 +53,7 @@ class AbstractiveSummarizer:
 
     def chunk_text(self, text):
         """
-        Split long text into chunks to fit within BART's token limit.
+        Split long text into chunks.
         
         Parameters:
         text (str): Input text to chunk.
@@ -61,14 +62,24 @@ class AbstractiveSummarizer:
         list: List of text chunks.
         """
         sentences = self.spacy_sent_tokenize(text)
+        # Filter out very short or malformed sentences
+        sentences = [s for s in sentences if len(s.split()) >= 5]
+    
+        if not sentences:
+            return [text]  # Return original if no valid sentences
+        
         chunks = []
         current_chunk = []
         current_length = 0
 
+        # Use actual max_input_length (512)
+        max_chunk_tokens = self.max_input_length - 50  # Leave room for prefix
+
         for sentence in sentences:
             sentence_tokens = self.tokenizer.encode(sentence, add_special_tokens=False)
-            if current_length + len(sentence_tokens) > self.max_input_length - 50:
-                chunks.append(" ".join(current_chunk))
+            if current_length + len(sentence_tokens) > max_chunk_tokens:
+                if current_chunk:
+                    chunks.append(". ".join(current_chunk) + ".")
                 current_chunk = [sentence]
                 current_length = len(sentence_tokens)
             else:
@@ -76,133 +87,148 @@ class AbstractiveSummarizer:
                 current_length += len(sentence_tokens)
 
         if current_chunk:
-            chunks.append(" ".join(current_chunk))
+            chunks.append(". ".join(current_chunk) + ".")
 
-        return chunks
+        return chunks if chunks else [text]
 
-    def summarize_chunk(self, chunk, num_sentences=3):
+    def summarize_chunk(self, chunk, num_sentences=3, min_length_ratio=0.6):
         """
-        Summarize a single chunk of text using BART.
+        Summarize a single chunk of text using LT5.
         
         Parameters:
         chunk (str): Text chunk to summarize.
         num_sentences (int): Approximate number of sentences in the summary.
-        
+        min_length_ratio (float): Minimum output length as ratio of input (0.5-0.7).
+
         Returns:
         str: Summarized text for the chunk.
         """
         try:
+            # Prepare prefix for legal domain
+            prefix = "Summarize: "
+            input_text = prefix + chunk
+            
             inputs = self.tokenizer(
-                chunk,
+                input_text,
                 max_length=self.max_input_length,
                 truncation=True,
                 padding="max_length",
                 return_tensors="pt"
             ).to(self.device)
 
-            avg_tokens_per_sentence = 20
-            dynamic_max_length = min(self.max_output_length, num_sentences * avg_tokens_per_sentence)
+            # Calculate lengths based on input size to prevent over-compression
+            input_token_count = inputs.input_ids.ne(self.tokenizer.pad_token_id).sum().item()
+        
+            # Dynamic length calculation - maintain 50-70% of input length
+            dynamic_min_length = int(input_token_count * min_length_ratio)
+            dynamic_max_length = min(int(input_token_count * 0.9), self.max_output_length)  # Allow up to 90% of input
+        
+            # Set reasonable bounds
+            dynamic_min_length = max(100, min(dynamic_min_length, 300))
+            dynamic_max_length = max(dynamic_min_length + 50, min(dynamic_max_length, 400))
+
+            logger.info(f"Input tokens: {input_token_count}, Min: {dynamic_min_length}, Max: {dynamic_max_length}")
 
             summary_ids = self.model.generate(
                 inputs.input_ids,
-                num_beams=4,
+                num_beams=2,
+                length_penalty=0.4,  # Changed from 0.8 - LOWER penalty = LONGER output
                 max_length=dynamic_max_length,
-                min_length=30,
-                early_stopping=True
-            )
+                min_length=dynamic_min_length,  # Much higher minimum
+                no_repeat_ngram_size=3,
+                repetition_penalty=1.5,  # Reduced from 2.0 to be less aggressive
+                early_stopping=True,
+                forced_eos_token_id=self.tokenizer.eos_token_id
+           )
 
             summary = self.tokenizer.decode(summary_ids[0], skip_special_tokens=True)
             return summary
         except Exception as e:
             logger.error(f"Error during chunk summarization: {e}")
-            return ""
+        return ""
 
-    def abstractive_summarize(self, text, num_sentences=3):
+    def _has_excessive_repetition(self, text):
+        """Check if text has excessive repetition."""
+        words = text.lower().split()
+        if len(words) < 10:
+            return False
+    
+        # Check for repeated words
+        word_counts = {}
+        for word in words:
+            word_counts[word] = word_counts.get(word, 0) + 1
+    
+        # If any word (except common ones) appears more than 30% of the time
+        common_words = {'the', 'a', 'an', 'to', 'of', 'and', 'in', 'is', 'for', 're'}
+        for word, count in word_counts.items():
+            if word not in common_words and count > len(words) * 0.3:
+                return True
+    
+        return False
+
+    def abstractive_summarize(self, extractive_summary, num_sentences=3, compression_ratio=0.6):
         """
-        Main function to create an abstractive summary of text.
+        Refine an extractive summary using abstractive summarization.
         
         Parameters:
-        text (str): The input text to summarize.
-        num_sentences (int): Approximate number of sentences in the summary.
+        extractive_summary (str): The output from extractive summarization to refine.
+        num_sentences (int): Approximate number of sentences in the final summary.
         
         Returns:
-        str: The abstractive summary.
+        str: The abstractive summary generated from the extractive summary.
         """
-        if not text or text.isspace():
+        if not extractive_summary or extractive_summary.isspace():
             return "No text to summarize."
+        
+        # Check if extractive summary is too short
+        words = extractive_summary.split()
+        sentences_in_extractive = len(self.spacy_sent_tokenize(extractive_summary))
+        
+        logger.info(f"Extractive summary: {len(words)} words, {sentences_in_extractive} sentences")
 
         try:
-            processed_text = preprocess_text(text)
-            chunks = self.chunk_text(processed_text)
-
+            chunks = self.chunk_text(extractive_summary)
             summaries = []
-            sentences_per_chunk = max(1, num_sentences // max(1, len(chunks)))
 
-            for chunk in chunks:
-                summary = self.summarize_chunk(chunk, sentences_per_chunk)
+            # Adjust sentences per chunk based on extractive length
+            # Goal: Keep 50-70% of extractive sentences
+            target_sentence_count = max(num_sentences, int(sentences_in_extractive * compression_ratio))
+            sentences_per_chunk = max(4, target_sentence_count // max(1, len(chunks)))
+
+            logger.info(f"Target sentences: {target_sentence_count}, Per chunk: {sentences_per_chunk}")
+
+            for i, chunk in enumerate(chunks):  # Added enumerate
+                logger.info(f"Processing chunk {i+1}/{len(chunks)}")
+                summary = self.summarize_chunk(chunk, sentences_per_chunk, min_length_ratio=compression_ratio)
+                
                 if summary:
-                    summaries.append(summary)
+                    # Check for repetition patterns
+                    if self._has_excessive_repetition(summary):
+                        logger.warning(f"Chunk {i+1} has excessive repetition, skipping")
+                        continue
+                    
+                    sentences = self.spacy_sent_tokenize(summary)
+                    if sentences:
+                        # Remove incomplete last sentence if it doesn't end with punctuation
+                        if sentences and not sentences[-1].endswith(('.', '!', '?')):
+                            sentences = sentences[:-1]
+                        
+                        clean_summary = " ".join(sentences)
+                        summaries.append(clean_summary)
+
+            if not summaries:
+                logger.error("No valid summaries generated")
+                return "Summarization failed - no valid output generated."
 
             final_summary = " ".join(summaries)
             final_sentences = self.spacy_sent_tokenize(final_summary)
-            if len(final_sentences) > num_sentences:
-                final_summary = " ".join(final_sentences[:num_sentences])
+            
+            # Keep target number of sentences
+            final_summary = " ".join(final_sentences[:target_sentence_count])
+
+            logger.info(f"Final summary: {len(final_summary.split())} words, {len(final_sentences[:target_sentence_count])} sentences")
 
             return final_summary.strip() if final_summary else "Summarization failed."
         except Exception as e:
-            logger.error(f"Error during abstractive summarization: {e}")
-            return f"Summarization error: {e}"
-
-    def hybrid_summarize(self, text, num_sentences=3, abstractive_weight=0.5):
-        """
-        Create a hybrid summary combining both extractive and abstractive methods.
-        
-        Parameters:
-        text (str): The input text to summarize.
-        num_sentences (int): Approximate number of sentences in the final summary.
-        abstractive_weight (float): Weight given to abstractive summary (0.0-1.0).
-                                  Extractive weight will be (1 - abstractive_weight).
-        
-        Returns:
-        dict: A dictionary containing both summaries and the combined summary.
-        """
-        try:
-            # Get extractive summary
-            extractive_result = extractive_summarize(text, method='hybrid', top_n=num_sentences)
-            
-            # Get abstractive summary
-            abstractive_result = self.abstractive_summarize(text, num_sentences=num_sentences)
-            
-            # Combine summaries
-            combined_summary = f"{abstractive_result}\n\nKey points (extracted):\n{extractive_result}"
-            
-            return {
-                'combined_summary': combined_summary,
-                'abstractive_summary': abstractive_result,
-                'extractive_summary': extractive_result
-            }
-            
-        except Exception as e:
-            logger.error(f"Error during hybrid summarization: {e}")
-            return {
-                'error': f"Hybrid summarization error: {e}",
-                'abstractive_summary': None,
-                'extractive_summary': None,
-                'combined_summary': None
-            }
-
-# Example usage
-if __name__ == "__main__":
-    # Demo usage when running this module directly. Uses logging instead of printing
-    sample_text = """
-    Natural language processing (NLP) is a subfield of linguistics, computer science, and artificial intelligence...
-    """
-    summarizer = AbstractiveSummarizer()
-    
-    # Get hybrid summary
-    hybrid_results = summarizer.hybrid_summarize(sample_text, num_sentences=3)
-    
-    logger.info("Hybrid Summary Results:")
-    logger.info("Combined Summary:\n%s", hybrid_results['combined_summary'])
-    logger.info("\nAbstractive Summary:\n%s", hybrid_results['abstractive_summary'])
-    logger.info("\nExtractive Summary:\n%s", hybrid_results['extractive_summary'])
+          logger.error(f"Error during abstractive summarization: {e}")
+        return f"Summarization error: {e}"
