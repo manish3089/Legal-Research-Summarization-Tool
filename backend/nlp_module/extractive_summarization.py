@@ -4,6 +4,7 @@ import networkx as nx
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import logging
+import re
 
 # Load SpaCy model
 nlp = spacy.load("en_core_web_sm")
@@ -58,30 +59,116 @@ def calculate_extraction_ratio(total_sentences, compression_ratio=0.5):
     return min(extracted_count, total_sentences)
 
 
-def hybrid_summarize(text, top_n=None, compression_ratio=0.5, textrank_weight=0.6, tfidf_weight=0.4):
+def calculate_legal_importance_scores(sentences):
     """
-    Summarizes text using a hybrid approach combining TextRank and TF-IDF.
+    Calculate legal importance scores for sentences based on legal markers and patterns.
+    Returns normalized scores between 0 and 1.
+    """
+    # Enhanced legal markers with weights
+    critical_markers = {
+        'held that': 0.35, 'Court held': 0.35, 'ruled that': 0.35,
+        'judgment': 0.30, 'concluded': 0.30, 'determined': 0.30,
+        'finding': 0.25, 'established': 0.25, 'decided': 0.25,
+        'Section': 0.20, 'Article': 0.20, 'Clause': 0.20,
+        'appellant': 0.15, 'respondent': 0.15, 'petitioner': 0.15,
+        'evidence': 0.15, 'testimony': 0.15, 'witness': 0.15,
+        'therefore': 0.10, 'consequently': 0.10, 'accordingly': 0.10
+    }
+    
+    scores = np.zeros(len(sentences))
+    for i, sent in enumerate(sentences):
+        sent_lower = sent.lower()
+        for marker, weight in critical_markers.items():
+            if marker.lower() in sent_lower:
+                scores[i] += weight
+        
+        # Boost for citations (e.g., "[2023] 1 SCC 123")
+        if re.search(r'\[\d{4}\]\s*\d+\s+[A-Z]+\s+\d+', sent):
+            scores[i] += 0.20
+        
+        # Boost for case names (e.g., "X v. Y")
+        if re.search(r'\b[A-Z][a-z]+\s+v\.?\s+[A-Z][a-z]+', sent):
+            scores[i] += 0.15
+    
+    # Normalize
+    if scores.max() > 0:
+        scores = scores / scores.max()
+    
+    return scores
+
+
+def calculate_position_scores(num_sentences):
+    """
+    Calculate position-based importance scores.
+    Legal documents: beginning and end are most important.
+    """
+    scores = np.zeros(num_sentences)
+    
+    # First 15% get high score
+    first_section = max(1, int(num_sentences * 0.15))
+    scores[:first_section] = 0.25
+    
+    # Last 10% get medium-high score
+    last_section = max(1, int(num_sentences * 0.10))
+    scores[-last_section:] = 0.20
+    
+    # Middle section gets lower score (gradual decay)
+    middle_start = first_section
+    middle_end = num_sentences - last_section
+    if middle_end > middle_start:
+        scores[middle_start:middle_end] = np.linspace(0.15, 0.10, middle_end - middle_start)
+    
+    return scores
+
+
+def calculate_sentence_coherence(sentences, sim_matrix):
+    """
+    Calculate coherence score based on similarity to surrounding sentences.
+    """
+    coherence_scores = np.zeros(len(sentences))
+    
+    for i in range(len(sentences)):
+        # Average similarity to adjacent sentences
+        adjacent_sims = []
+        if i > 0:
+            adjacent_sims.append(sim_matrix[i, i-1])
+        if i < len(sentences) - 1:
+            adjacent_sims.append(sim_matrix[i, i+1])
+        
+        if adjacent_sims:
+            coherence_scores[i] = np.mean(adjacent_sims)
+    
+    # Normalize
+    if coherence_scores.max() > 0:
+        coherence_scores = coherence_scores / coherence_scores.max()
+    
+    return coherence_scores
+
+
+def hybrid_summarize(text, top_n=None, compression_ratio=0.5, textrank_weight=0.4, tfidf_weight=0.3):
+    """
+    Enhanced hybrid summarization with legal-specific features.
     
     Parameters:
         text (str): The input text.
         top_n (int): Number of top sentences (if None, uses compression_ratio).
         compression_ratio (float): Percentage of sentences to extract (0.4-0.7).
-        textrank_weight (float): Weight given to TextRank scores (0.0-1.0).
-        tfidf_weight (float): Weight given to TF-IDF scores (0.0-1.0).
+        textrank_weight (float): Weight for TextRank (default 0.4).
+        tfidf_weight (float): Weight for TF-IDF (default 0.3).
         
     Returns:
         str: Extractive summary.
     """
-    if textrank_weight + tfidf_weight != 1.0:
-        raise ValueError("Weights must sum to 1.0")
+    # Weights: textrank(0.4) + tfidf(0.3) + legal(0.2) + position(0.05) + coherence(0.05) = 1.0
+    legal_weight = 0.2
+    position_weight = 0.05
+    coherence_weight = 0.05
+    
+    total_weight = textrank_weight + tfidf_weight + legal_weight + position_weight + coherence_weight
+    if abs(total_weight - 1.0) > 0.01:
+        raise ValueError(f"Weights must sum to 1.0 (current: {total_weight})")
         
     sentences = split_sentences(text)
-
-    legal_markers = ['<HD>', '<IS>', 'Section', 'held that', 'Court held']
-    boost_scores = np.zeros(len(sentences))
-    for i, sent in enumerate(sentences):
-        if any(marker in sent for marker in legal_markers):
-            boost_scores[i] = 0.2  # 20% boost
     
     # Calculate top_n based on compression ratio if not provided
     if top_n is None:
@@ -89,33 +176,57 @@ def hybrid_summarize(text, top_n=None, compression_ratio=0.5, textrank_weight=0.
     
     if len(sentences) < top_n:
         return " ".join(sentences)
-
-    # Rest of your existing code remains the same
-    vectorizer = TfidfVectorizer(stop_words='english')
+    
+    # TF-IDF vectorization with legal domain terms
+    vectorizer = TfidfVectorizer(
+        stop_words='english',
+        ngram_range=(1, 2),  # Include bigrams for legal phrases
+        max_features=500
+    )
     X = vectorizer.fit_transform(sentences)
     
+    # TextRank scores
     sim_matrix = cosine_similarity(X)
     np.fill_diagonal(sim_matrix, 0)
     nx_graph = nx.from_numpy_array(sim_matrix)
-    textrank_scores = np.array(list(nx.pagerank(nx_graph).values()))
+    textrank_scores = np.array(list(nx.pagerank(nx_graph, alpha=0.85).values()))
     
+    # Normalize TextRank
     if textrank_scores.max() != textrank_scores.min():
         textrank_scores = (textrank_scores - textrank_scores.min()) / (textrank_scores.max() - textrank_scores.min())
     
+    # TF-IDF scores
     tfidf_scores = X.sum(axis=1).A1
-    
     if tfidf_scores.max() != tfidf_scores.min():
         tfidf_scores = (tfidf_scores - tfidf_scores.min()) / (tfidf_scores.max() - tfidf_scores.min())
     
-    combined_scores = textrank_weight * textrank_scores + tfidf_weight * tfidf_scores + boost_scores
+    # Legal importance scores
+    legal_scores = calculate_legal_importance_scores(sentences)
+    
+    # Position scores
+    position_scores = calculate_position_scores(len(sentences))
+    
+    # Coherence scores
+    coherence_scores = calculate_sentence_coherence(sentences, sim_matrix)
+    
+    # Combined scoring
+    combined_scores = (
+        textrank_weight * textrank_scores +
+        tfidf_weight * tfidf_scores +
+        legal_weight * legal_scores +
+        position_weight * position_scores +
+        coherence_weight * coherence_scores
+    )
+    
+    # Select top sentences
     ranked_indices = np.argsort(combined_scores)[::-1][:top_n]
     selected = [sentences[i] for i in sorted(ranked_indices)]
     
-     # Ensure proper sentence separation
-    return ". ".join([s.rstrip('.') for s in selected]) + "."  # Add period separation
+    # Ensure proper sentence separation
+    return ". ".join([s.rstrip('.') for s in selected]) + "."
 
 
-def summarize(text, method='hybrid', top_n=None, compression_ratio=0.5, textrank_weight=0.6, tfidf_weight=0.4):
+def summarize(text, method='hybrid', top_n=None, compression_ratio=0.5, textrank_weight=0.4, tfidf_weight=0.3):
     """
     Unified summarization function supporting multiple methods.
     
@@ -124,8 +235,8 @@ def summarize(text, method='hybrid', top_n=None, compression_ratio=0.5, textrank
         method (str): One of 'hybrid', 'textrank', or 'tfidf'.
         top_n (int): Number of sentences (if None, uses compression_ratio).
         compression_ratio (float): Percentage of sentences to extract (0.4-0.7).
-        textrank_weight (float): Weight for TextRank in hybrid method.
-        tfidf_weight (float): Weight for TF-IDF in hybrid method.
+        textrank_weight (float): Weight for TextRank in hybrid method (default 0.4).
+        tfidf_weight (float): Weight for TF-IDF in hybrid method (default 0.3).
         
     Returns:
         str: Extractive summary.

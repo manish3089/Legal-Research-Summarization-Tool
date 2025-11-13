@@ -109,30 +109,90 @@ class ForensicDocumentAnalyzer:
     # --------------------------------------------------------
 
     def extract_text_from_pdf(self, pdf_path):
-        """Extract plain text from a PDF file."""
+        """Extract and clean text from a PDF file."""
         try:
             with fitz.open(pdf_path) as doc:
                 text = ''.join([page.get_text() for page in doc])
+            
+            # Clean extracted text
+            text = self._clean_extracted_text(text)
+            
             logger.info(f"Extracted {len(text)} characters from PDF.")
             return text
         except Exception as e:
             logger.error(f"PDF extraction error: {e}")
             return ""
+    
+    def _clean_extracted_text(self, text):
+        """Clean and normalize extracted PDF text."""
+        # Remove excessive whitespace and dots
+        text = re.sub(r'\.{3,}', ' ', text)  # Replace ... with space
+        text = re.sub(r'-{2,}', ' ', text)   # Replace -- with space
+        text = re.sub(r'_{2,}', ' ', text)   # Replace __ with space
+        
+        # Remove random single characters surrounded by spaces
+        text = re.sub(r'\s+[a-zA-Z]\s+', ' ', text)
+        
+        # Fix spacing around punctuation
+        text = re.sub(r'\s+([.,;:!?])', r'\1', text)
+        text = re.sub(r'([.,;:!?])([A-Z])', r'\1 \2', text)
+        
+        # Remove excessive newlines
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        
+        # Remove control characters and special unicode
+        text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]', '', text)
+        
+        # Normalize whitespace
+        text = re.sub(r'[ \t]+', ' ', text)
+        
+        # Remove lines with mostly non-alphanumeric content
+        lines = text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            line = line.strip()
+            if len(line) < 10:
+                continue
+            # Count alphanumeric vs other characters
+            alphanum_count = sum(c.isalnum() or c.isspace() for c in line)
+            if alphanum_count / len(line) > 0.6:  # At least 60% useful chars
+                cleaned_lines.append(line)
+        
+        text = '\n'.join(cleaned_lines)
+        
+        return text.strip()
 
     def extract_metadata(self, text):
-        """Extract metadata using spaCy entity recognition."""
+        """Extract metadata using spaCy entity recognition with safe defaults."""
         try:
             entities = extract_entities(text)
+            
+            # Safe extraction with defaults
+            dates = entities.get('DATE', [])
+            case_ids = entities.get('CASE_ID', [])
+            people = entities.get('PERSON', [])
+            orgs = entities.get('ORG', [])
+            locations = entities.get('GPE', [])
+            
             return {
-                'dates': entities.get('DATE', [])[:3],
-                'case_number': entities.get('CASE_ID', ['Unknown'])[0],
-                'people': entities.get('PERSON', [])[:5],
-                'organizations': entities.get('ORG', [])[:3],
-                'locations': entities.get('GPE', [])[:3]
+                'dates': dates[:3] if dates else [],
+                'case_number': case_ids[0] if case_ids else 'Unknown',
+                'people': people[:5] if people else [],
+                'organizations': orgs[:3] if orgs else [],
+                'locations': locations[:3] if locations else []
             }
         except Exception as e:
             logger.error(f"Metadata extraction failed: {e}")
-            return {"error": str(e)}
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                'dates': [],
+                'case_number': 'Unknown',
+                'people': [],
+                'organizations': [],
+                'locations': [],
+                'error': str(e)
+            }
 
     def extract_forensic_findings(self, text):
         """Extract key legal or forensic findings."""
@@ -172,17 +232,28 @@ class ForensicDocumentAnalyzer:
             final_summary = extractive_summary
             abstractive_summary = None
 
-            # Step 2: Optional abstractive refinement
+            # Step 2: Optional abstractive refinement with timeout
             if mode == 'hybrid':
                 try:
+                    logger.info("🔄 Starting abstractive refinement...")
                     cleaned_text = self.clean_text_for_abstractive(extractive_summary)
                     abstractive_model = get_abstractive_model()
+                    
+                    # Limit input size for faster processing
+                    max_words = 500  # Limit to 500 words for speed
+                    words = cleaned_text.split()
+                    if len(words) > max_words:
+                        cleaned_text = ' '.join(words[:max_words])
+                        logger.info(f"⚠️ Truncated to {max_words} words for faster processing")
+                    
                     abstractive_summary = abstractive_model.abstractive_summarize(
                         cleaned_text, num_sentences=summary_length, compression_ratio=0.6
                     )
                     final_summary = abstractive_summary
+                    logger.info("✅ Abstractive refinement complete")
                 except Exception as e:
                     logger.error(f"⚠️ Abstractive summarization failed: {e}")
+                    logger.info("📝 Using extractive summary as fallback")
 
             # Step 3: Extract findings & stats
             findings = self.extract_forensic_findings(text)
@@ -196,7 +267,14 @@ class ForensicDocumentAnalyzer:
 
             # Step 4: Add to RAG Index
             logger.info("📘 Adding document to RAG index...")
-            rag_engine.add_document(text, filename=os.path.basename(file_path))
+            try:
+                success = rag_engine.add_document(text, filename=os.path.basename(file_path))
+                if success:
+                    logger.info("✅ Document successfully added to RAG index")
+                else:
+                    logger.error("❌ Failed to add document to RAG index")
+            except Exception as rag_error:
+                logger.error(f"❌ RAG indexing error: {rag_error}")
 
             # Step 5: Return response
             return {

@@ -93,7 +93,7 @@ class AbstractiveSummarizer:
 
     def summarize_chunk(self, chunk, num_sentences=3, min_length_ratio=0.6):
         """
-        Summarize a single chunk of text using LT5.
+        Summarize a single chunk of text using LT5 with enhanced legal prompting.
         
         Parameters:
         chunk (str): Text chunk to summarize.
@@ -104,8 +104,8 @@ class AbstractiveSummarizer:
         str: Summarized text for the chunk.
         """
         try:
-            # Prepare prefix for legal domain
-            prefix = "Summarize: "
+            # Enhanced legal domain prefix with instructions
+            prefix = "Summarize the following legal text, focusing on key facts, legal issues, holdings, and conclusions: "
             input_text = prefix + chunk
             
             inputs = self.tokenizer(
@@ -119,25 +119,26 @@ class AbstractiveSummarizer:
             # Calculate lengths based on input size to prevent over-compression
             input_token_count = inputs.input_ids.ne(self.tokenizer.pad_token_id).sum().item()
         
-            # Dynamic length calculation - maintain 50-70% of input length
+            # Dynamic length calculation - maintain 60-80% of input length for better detail
             dynamic_min_length = int(input_token_count * min_length_ratio)
-            dynamic_max_length = min(int(input_token_count * 0.9), self.max_output_length)  # Allow up to 90% of input
+            dynamic_max_length = min(int(input_token_count * 0.95), self.max_output_length)
         
-            # Set reasonable bounds
-            dynamic_min_length = max(100, min(dynamic_min_length, 300))
-            dynamic_max_length = max(dynamic_min_length + 50, min(dynamic_max_length, 400))
+            # Set reasonable bounds with higher minimums for legal content
+            dynamic_min_length = max(120, min(dynamic_min_length, 350))
+            dynamic_max_length = max(dynamic_min_length + 80, min(dynamic_max_length, 450))
 
             logger.info(f"Input tokens: {input_token_count}, Min: {dynamic_min_length}, Max: {dynamic_max_length}")
 
             summary_ids = self.model.generate(
                 inputs.input_ids,
-                num_beams=2,
-                length_penalty=0.4,  # Changed from 0.8 - LOWER penalty = LONGER output
+                num_beams=4,  # Increased from 2 for better quality
+                length_penalty=0.3,  # Lower penalty for longer, detailed output
                 max_length=dynamic_max_length,
-                min_length=dynamic_min_length,  # Much higher minimum
+                min_length=dynamic_min_length,
                 no_repeat_ngram_size=3,
-                repetition_penalty=1.5,  # Reduced from 2.0 to be less aggressive
+                repetition_penalty=1.3,  # Balanced to avoid excessive penalties
                 early_stopping=True,
+                do_sample=False,  # Deterministic for consistency
                 forced_eos_token_id=self.tokenizer.eos_token_id
            )
 
