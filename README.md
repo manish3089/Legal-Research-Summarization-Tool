@@ -242,22 +242,12 @@ See [SETUP_FOR_TEAM.md](SETUP_FOR_TEAM.md) for more troubleshooting tips.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👥 Authors
-
-- **Syed Shahabaz A** - *Initial work*
-
 ## 🙏 Acknowledgments
 
 - spaCy for NLP capabilities
 - Hugging Face for transformer models
 - Indian Government for open legal data
 - Open source community
-
-## 📧 Contact
-
-For questions or support, please open an issue on GitHub.
-
----
 
 **Made with ⚖️ for Legal AI | 2025**
 
