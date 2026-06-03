@@ -18,10 +18,6 @@
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Python 3.8 or higher
-- 8GB RAM minimum (16GB recommended)
-- 2GB free disk space
 
 ### Installation
 
@@ -164,31 +160,6 @@ Legal-Research-Summarization-Tool/
 └── README.md                      # This file
 ```
 
-## 🔒 Privacy & Security
-
-- ✅ **100% Local Processing**: No external API calls (except model downloads)
-- ✅ **No Data Collection**: Uploaded documents are deleted after analysis
-- ✅ **Offline Capable**: Works without internet after initial setup
-- ✅ **Open Source**: Full transparency
-
-## 📊 Performance
-
-- **Summarization**: ~10-30 seconds per document
-- **RAG Query**: ~2-5 seconds per query
-- **Memory Usage**: ~2-4GB RAM
-- **Accuracy**: 85%+ on legal document summarization
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Development Setup
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -241,14 +212,3 @@ See [SETUP_FOR_TEAM.md](SETUP_FOR_TEAM.md) for more troubleshooting tips.
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- spaCy for NLP capabilities
-- Hugging Face for transformer models
-- Indian Government for open legal data
-- Open source community
-
-**Made with ⚖️ for Legal AI | 2025**
-
-⭐ Star this repo if you find it useful!
