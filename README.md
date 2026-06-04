@@ -1,38 +1,64 @@
-# ⚖️ Legal Research & Summarization Tool
+# Legal Research & Summarization Tool
 
-A legal document analysis system that combines summarization, entity extraction, and Retrieval-Augmented Generation (RAG) for Indian legal documents.
+A legal document analysis system that combines document summarization, information extraction, and Retrieval-Augmented Generation (RAG) for Indian legal texts.
 
 ## Features
 
-* Document Summarization (Extractive + Hybrid)
-* RAG-based Question Answering
-* Indian Law Knowledge Base
-* Entity Extraction (Names, Dates, Sections, Case Numbers)
-* Key Findings Extraction
-* Semantic Search using FAISS
-* Local Deployment
+* Document summarization (Extractive and Hybrid)
+* Question answering using RAG
+* Support for Indian legal documents
+* Named Entity Recognition (Names, Dates, Case Numbers, Sections)
+* Key findings extraction
+* Semantic search using FAISS
+* Local deployment
 
-## 🚀 Quick Start
+## Tech Stack
+
+* **Backend:** Flask
+* **Frontend:** Streamlit
+* **NLP:** spaCy, NLTK
+* **Summarization:** TextRank, Tfidf
+* **RAG:** FAISS, Sentence Transformers
+* **LLM:** FLAN-T5 Base
+* **PDF Processing:** PyMuPDF
+
+---
+
+## Installation
 
 ### Prerequisites
-- Python 3.8 or higher
-- 8GB RAM minimum (16GB recommended)
-- 2GB free disk space
 
-### Installation
+* Python 3.8+
+* 8 GB RAM minimum
+* 2 GB free disk space
 
-1. **Clone the repository**
+### Setup
+
+Clone the repository:
+
 ```bash
 git clone https://github.com/YOUR_USERNAME/Legal-Research-Summarization-Tool.git
-
 cd Legal-Research-Summarization-Tool
+```
 
-pip install -r requirements_updated.txt
+Install dependencies:
 
-# Windows
+```bash
+pip install -r requirements.txt
+```
+
+Run the application:
+
+**Windows**
+
+```bash
 .\run_both.bat
+```
 
-# Linux/Mac
+**Linux / macOS**
+
+```bash
+chmod +x run_both.sh
 ./run_both.sh
 ```
 
@@ -42,111 +68,133 @@ Open:
 http://localhost:8502
 ```
 
+---
+
 ## Usage
 
+### Document Analysis
+
 1. Upload a legal PDF.
-2. Generate a summary.
-3. Extract entities and key findings.
-4. Ask questions about the document or Indian laws.
+2. Select a summarization mode.
+3. View the summary, extracted entities, and key findings.
+
+### Question Answering
+
+The system supports:
+
+* Queries on uploaded documents
+* Queries on preloaded Indian legal content
+
+Example:
+
+```text
+What is the punishment for murder under IPC?
+```
+
+```text
+Explain IPC Section 420.
+```
+
+---
+
+## Preloaded Legal Knowledge
+
+The default knowledge base includes selected IPC sections:
+
+* Section 302 – Murder
+* Section 304 – Culpable Homicide
+* Section 323 – Voluntarily Causing Hurt
+* Section 376 – Rape
+* Section 379 – Theft
+* Section 406 – Criminal Breach of Trust
+* Section 420 – Cheating
+* Section 498A – Cruelty to Women
+
+---
+
+## Expanding the Knowledge Base
+
+Place additional legal documents in:
+
+```text
+data/indian_laws/
+├── criminal_law/
+├── civil_law/
+├── constitutional_law/
+└── special_acts/
+```
+
+Load documents:
+
+```bash
+cd backend
+python load_indian_laws.py
+```
+
+Restart the application after indexing.
+
+---
 
 ## Project Structure
 
 ```text
 Legal-Research-Summarization-Tool/
 ├── backend/
+│   ├── app.py
+│   ├── load_indian_laws.py
+│   ├── nlp_module/
+│   └── rag_module/
 ├── frontend/
+│   └── streamlit_app.py
 ├── data/
 ├── uploads/
 ├── vector_store/
 ├── requirements_updated.txt
+├── run_both.bat
 └── README.md
 ```
 
-## 🔒 Privacy & Security
+---
 
-- ✅ **100% Local Processing**: No external API calls (except model downloads)
-- ✅ **No Data Collection**: Uploaded documents are deleted after analysis
-- ✅ **Offline Capable**: Works without internet after initial setup
-- ✅ **Open Source**: Full transparency
+## Performance
 
-## 📊 Performance
+| Task          | Typical Time |
+| ------------- | ------------ |
+| Summarization | 10–30 sec    |
+| RAG Query     | 2–5 sec      |
+| Memory Usage  | 2–4 GB RAM   |
 
-- **Summarization**: ~10-30 seconds per document
-- **RAG Query**: ~2-5 seconds per query
-- **Memory Usage**: ~2-4GB RAM
-- **Accuracy**: 85%+ on legal document summarization
+---
 
-## 🤝 Contributing
+## Troubleshooting
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+### Port Already in Use
 
-### Development Setup
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+**Windows**
 
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**Port already in use**
 ```bash
-# Windows
 taskkill /F /IM python.exe
+```
 
-# Linux/Mac
+**Linux/macOS**
+
+```bash
 pkill python
 ```
 
-**Out of memory**
-- Use "Extractive" mode instead of "Hybrid"
-- Close other applications
-- Increase system swap space
+### High Memory Usage
 
-**Model download fails**
-- Check internet connection
-- Retry - models auto-download on first use
-- Manually download from HuggingFace if needed
+* Use Extractive mode
+* Close unnecessary applications
+* Increase swap space if required
 
-See [SETUP_FOR_TEAM.md](SETUP_FOR_TEAM.md) for more troubleshooting tips.
+## Documentation
 
-## 📖 Documentation
+* SETUP_FOR_TEAM.md
+* INDIAN_LAW_TRAINING_GUIDE.md
+* QUICK_START_TRAINING.md
+* SETUP_COMPLETE.md
 
-- [Setup Guide for Teams](SETUP_FOR_TEAM.md)
-- [Indian Law Training Guide](INDIAN_LAW_TRAINING_GUIDE.md)
-- [Quick Start Reference](QUICK_START_TRAINING.md)
-- [Setup Complete Overview](SETUP_COMPLETE.md)
+---
 
-## 🎯 Use Cases
-
-### For Legal Professionals
-- Quick case law summarization
-- Multi-document search and analysis
-- Instant legal query responses
-
-### For Law Students
-- Study IPC/CrPC sections
-- Understand legal concepts
-- Research case studies
-
-### For Courts & Analysts
-- Process large document volumes
-- Extract metadata and key facts
-- Build custom legal knowledge bases
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- spaCy for NLP capabilities
-- Hugging Face for transformer models
-- Indian Government for open legal data
-- Open source community
-
-**Made with ⚖️ for Legal AI | 2025**
-
-⭐ Star this repo if you find it useful!
+Built as a Final Year Project for legal document analysis and legal information retrieval.

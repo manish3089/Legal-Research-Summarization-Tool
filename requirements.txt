@@ -1,0 +1,29 @@
+# Core ML/NLP Libraries
+torch>=2.0.0
+transformers>=4.30.0
+sentence-transformers>=2.2.2
+spacy>=3.5.0
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0-py3-none-any.whl
+
+# Summarization & Text Processing
+nltk>=3.8.1
+scikit-learn>=1.2.0
+networkx>=3.0
+numpy>=1.24.0
+
+# RAG & Vector Search
+faiss-cpu>=1.7.4
+pymupdf>=1.22.0  # fitz for PDF processing
+
+# Evaluation Metrics
+rouge-score>=0.1.2
+
+# Web Framework
+flask>=2.3.0
+flask-cors>=4.0.0
+streamlit>=1.25.0
+streamlit-lottie>=0.0.5
+requests>=2.31.0
+
+# Additional utilities
+python-multipart>=0.0.6

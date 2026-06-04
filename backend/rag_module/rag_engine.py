@@ -49,8 +49,8 @@ class LegalRAG:
 
         self.vector_store_path = "vector_store/legal_faiss.index"
         self.metadata_path = "vector_store/legal_metadata.json"
-
-        self.dimension = self.embedder.get_sentence_embedding_dimension()
+        
+        self.dimension = self.embedder.get_embedding_dimension()
         # Use IndexHNSWFlat for faster search on larger datasets
         self.index = faiss.IndexHNSWFlat(self.dimension, 32)
         self.documents = []

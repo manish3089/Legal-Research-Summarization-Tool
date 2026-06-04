@@ -20,16 +20,7 @@ import spacy
 nlp = spacy.load("en_core_web_sm")
 
 class AbstractiveSummarizer:
-    """
-    A class to perform abstractive summarization using t5 model.
-    """
     def __init__(self, model_name="santoshtyss/lt5-small"):
-        """
-        Initialize the LT5 model and tokenizer.
-        
-        Parameters:
-        model_name (str): Name of the pretrained LT5 model to use.
-        """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
@@ -39,28 +30,11 @@ class AbstractiveSummarizer:
         logger.info(f"Model max input length: {self.max_input_length}")
 
     def spacy_sent_tokenize(self, text):
-        """
-        Use spaCy to tokenize text into sentences.
-        
-        Parameters:
-        text (str): Input text.
-        
-        Returns:
-        list: List of sentences.
-        """
         doc = nlp(text)
         return [sent.text.strip() for sent in doc.sents]
 
     def chunk_text(self, text):
-        """
-        Split long text into chunks.
-        
-        Parameters:
-        text (str): Input text to chunk.
-        
-        Returns:
-        list: List of text chunks.
-        """
+        """Splits long text into chunks. Returns list of text chunks."""
         sentences = self.spacy_sent_tokenize(text)
         # Filter out very short or malformed sentences
         sentences = [s for s in sentences if len(s.split()) >= 5]
