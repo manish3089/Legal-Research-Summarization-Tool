@@ -49,23 +49,8 @@ pip install -r requirements.txt
 
 Run the application:
 
-**Windows**
-
 ```bash
-.\run_both.bat
-```
-
-**Linux / macOS**
-
-```bash
-chmod +x run_both.sh
-./run_both.sh
-```
-
-Open:
-
-```text
-http://localhost:8502
+streamlit run streamlit.py
 ```
 
 ---
@@ -144,13 +129,11 @@ Legal-Research-Summarization-Tool/
 │   ├── load_indian_laws.py
 │   ├── nlp_module/
 │   └── rag_module/
-├── frontend/
-│   └── streamlit_app.py
+│   └── streamlit.py
 ├── data/
 ├── uploads/
 ├── vector_store/
-├── requirements_updated.txt
-├── run_both.bat
+├── requirements.txt
 └── README.md
 ```
 
